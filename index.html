@@ -32,6 +32,12 @@ button{border:0;border-radius:14px;min-height:42px;padding:0 13px;font-weight:80
 .notice{position:absolute;z-index:1100;left:12px;right:12px;bottom:max(13px,env(safe-area-inset-bottom));background:rgba(255,253,248,.96);border:1px solid #e2dac9;border-radius:16px;padding:11px 13px;box-shadow:0 8px 26px rgba(41,59,45,.16);font-size:11px;color:#667269;display:none}
 @media(min-width:720px){header{padding-left:20px;padding-right:20px}.toolbar{max-width:720px}.nature-strip{left:20px;right:20px}}
 
+
+.station-memo-box{margin-top:12px;padding-top:10px;border-top:1px solid #e5e0d4}
+.station-memo-title{font-size:13px;font-weight:900;color:#594a3d;margin-bottom:6px}
+.station-memo-input{display:block;width:100%;min-height:72px;box-sizing:border-box;border:1px solid #d7d0c4;border-radius:10px;padding:9px 10px;font-size:14px;line-height:1.45;background:#fff;color:#333;resize:vertical}
+.station-memo-save{display:block;width:100%;margin-top:7px;padding:9px 10px;border:0;border-radius:10px;background:#2f6f44;color:#fff;font-size:14px;font-weight:900}
+.station-memo-note{margin-top:5px;font-size:11px;color:#777;line-height:1.4}
 .station-popup{min-width:230px;padding:2px 0 3px}
 .station-popup .popup-name{font-size:17px;font-weight:900;color:#234d32;margin-bottom:3px}
 .station-popup .popup-meta{font-size:12px;color:#657064;margin-bottom:8px}
@@ -470,7 +476,7 @@ header{
 </head>
 <body>
 <div class="app"><header><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1>道の駅 全国旅マップ</h1><div class="sub">道の駅・鉄道駅・宿泊施設を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
-  <div class="search"><input id="searchInput" type="search" placeholder="道の駅・都道府県・市町村を検索" autocomplete="off" /></div>
+  <div class="search"><input id="searchInput" type="search" placeholder="道の駅・都道府県・市町村・メモを検索" autocomplete="off" /></div>
   <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
     <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
     <a class="top-social-btn fb" href="https://www.facebook.com/search/top/?q=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="Facebookで道の駅を検索">f</a>
@@ -513,9 +519,30 @@ function setStatus(msg,ms=0){
   el.textContent=msg; el.classList.remove('hidden');
   if(ms)setTimeout(()=>el.classList.add('hidden'),ms);
 }
+
+const STATION_MEMO_KEY='michinoekiStationMemosV1';
+function loadStationMemos(){
+  try{return JSON.parse(localStorage.getItem(STATION_MEMO_KEY)||'{}')||{};}catch(e){return {};}
+}
+function getStationMemo(id){
+  const all=loadStationMemos();
+  return String(all[String(id)]||'');
+}
+function saveStationMemo(id){
+  const el=document.getElementById(`stationMemo-${id}`);
+  if(!el)return false;
+  const all=loadStationMemos();
+  const text=el.value.trim();
+  if(text) all[String(id)]=text; else delete all[String(id)];
+  localStorage.setItem(STATION_MEMO_KEY,JSON.stringify(all));
+  setStatus(text?'メモを保存しました':'メモを削除しました',1600);
+  return false;
+}
+
 function popup(s,lat,lon){
   const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
 const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
+  const stationMemo = getStationMemo(s.id);
 
   const socialQuery = encodeURIComponent(`道の駅${s.name}`);
   const xUrl = `https://x.com/search?q=${socialQuery}&src=typed_query`;
@@ -534,6 +561,13 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
         <a class="social-btn x" href="${xUrl}" target="_blank" rel="noopener">𝕏 X</a>
         <a class="social-btn fb" href="${fbUrl}" target="_blank" rel="noopener">f Facebook</a>
         <a class="social-btn yt" href="${ytUrl}" target="_blank" rel="noopener">▶ YouTube</a>
+      </div>
+
+      <div class="station-memo-box">
+        <div class="station-memo-title">📝 自分用メモ</div>
+        <textarea id="stationMemo-${Number(s.id)}" class="station-memo-input" placeholder="例：ソフトクリームがおいしい、温泉あり、次回は朝に寄る">${esc(stationMemo)}</textarea>
+        <button type="button" class="station-memo-save" onclick="saveStationMemo(${Number(s.id)})">メモを保存</button>
+        <div class="station-memo-note">保存したメモの言葉でも上の検索欄から検索できます。</div>
       </div>
 
       <div class="popup-route-title">📍 現在地からの移動方法</div>
@@ -644,7 +678,7 @@ function render(q=''){
 
   // Search is allowed across all 1,231 stations.
   if(key){
-    const matched=GEO.filter(st=>norm(`${st.name}${st.pref}${st.loc||''}`).includes(key));
+    const matched=GEO.filter(st=>norm(`${st.name}${st.pref}${st.loc||''}${getStationMemo(st.id)}`).includes(key));
     drawStationMarkers(matched.slice(0,600));
     const badge=document.getElementById('countBadge');
     if(badge)badge.textContent=`${matched.length}駅検索`;
@@ -895,6 +929,16 @@ let railVisible=false;
 function railPopup(r){
   const tq=encodeURIComponent(`${r.n} ${r.l||''} 時刻表`);
   const gq=encodeURIComponent(`${r.n}駅`);
+  const lat=Number(r.la),lon=Number(r.lo);
+  const routeHtml=(Number.isFinite(lat)&&Number.isFinite(lon)) ? `
+    <div class="popup-route-title">📍 現在地からこの駅への行き方</div>
+    <div class="popup-route-grid">
+      <button type="button" onclick="routeToStation(${lat},${lon},'d')">🚗<span>車</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'w')">🚶<span>徒歩</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'r')">🚆<span>公共交通</span></button>
+    </div>
+    <button type="button" onclick="routeToStationGoogle(${lat},${lon})" style="width:100%;margin-top:7px;padding:10px;border:1px solid #cfd7cf;border-radius:10px;background:#fff;color:#285b3b;font-weight:800;font-size:13px">Googleマップでルート</button>
+  ` : '';
   return `<div class="rail-station-popup">
     <div class="rail-station-name">🚉 ${esc(r.n)}</div>
     <div class="rail-station-meta">${esc(r.l||'路線情報なし')}<br>${esc(r.o||'事業者情報なし')}</div>
@@ -902,6 +946,7 @@ function railPopup(r){
       <a class="rail-timetable-btn" href="https://www.google.com/search?q=${tq}" target="_blank" rel="noopener">🕐 時刻表を見る</a>
       <a class="rail-map-btn" href="https://www.google.com/maps/search/?api=1&query=${gq}" target="_blank" rel="noopener">📍 地図で見る</a>
     </div>
+    ${routeHtml}
   </div>`;
 }
 function renderRails(){
