@@ -355,7 +355,17 @@ header{
   box-shadow:var(--shadow)!important;
   background:#fff!important;
 }
-#map{min-height:66vh!important}
+/* 地図をできるだけ大きくし、道の駅詳細ポップアップが地図内に収まりやすくする */
+body{overflow-y:auto!important;overflow-x:hidden!important}
+.app{height:auto!important;min-height:100dvh!important;display:block!important}
+.mapwrap{height:max(900px,calc(100dvh - 170px))!important;min-height:900px!important;position:relative!important}
+#map{height:100%!important;min-height:900px!important;position:absolute!important;inset:0!important}
+@media (max-width:600px){
+  .mapwrap{margin:8px 4px 0!important;height:max(920px,calc(100dvh - 150px))!important;min-height:920px!important;border-radius:20px!important}
+  #map{min-height:920px!important}
+  .leaflet-popup-content-wrapper{max-width:calc(100vw - 34px)!important}
+  .leaflet-popup-content{margin:12px!important}
+}
 .leaflet-control-zoom a{
   background:#fffdf9!important;
   color:var(--brown)!important;
