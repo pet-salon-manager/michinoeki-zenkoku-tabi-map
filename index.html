@@ -514,30 +514,33 @@ function setStatus(msg,ms=0){
   if(ms)setTimeout(()=>el.classList.add('hidden'),ms);
 }
  function showNearbyHotels(lat,lon){
-  lat=Number(lat);
-  lon=Number(lon);
+  lat = Number(lat);
+  lon = Number(lon);
 
-  if(!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if(!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
 
+  // ① 道の駅ポップアップを閉じる
   map.closePopup();
 
-  setTimeout(()=>{
-    map.setView([lat,lon],13,{animate:false});
+  // ② 道の駅を中心にズーム13
+  map.setView([lat,lon],13);
 
-    setTimeout(()=>{
-      const t=document.getElementById('hotelToggle');
+  // ③ 宿泊施設をON
+  hotelVisible = true;
 
-      if(t && !t.checked){
-        t.checked=true;
-        t.dispatchEvent(new Event('change',{bubbles:true}));
-      }else{
-        hotelVisible=true;
-        renderHotelsForViewport();
-      }
-    },300);
+  const toggle = document.getElementById('hotelToggle');
+  if(toggle) toggle.checked = true;
 
-  },300);
-} 
+  const state = document.getElementById('hotelToggleState');
+  if(state) state.textContent = 'ON';
+
+  // ④ 地図の表示位置が変わった後にホテルを描画
+  setTimeout(function(){
+    renderHotelsForViewport();
+  },500);
+
+  return false;
+}
 function popup(s,lat,lon){
   const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
 const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
@@ -563,7 +566,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
       <div class="nearby-title">周辺を探す</div>
       <div class="nearby-grid">
-        <a class="nearby-btn hotel" href="#" onclick="alert('ホテルボタン動作OK');showNearbyHotels(${lat},${lon});return false;">🏨<span>この道の駅周辺のホテルを見る</span></a>
+        <a class="nearby-btn hotel" href="#" onclick="showNearbyHotels(${lat},${lon});return false;">🏨<span>この道の駅周辺のホテルを見る</span></a>
         <a class="nearby-btn onsen" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`温泉 ${s.name}`)}" target="_blank" rel="noopener">♨️<span>周辺の温泉</span></a>
         <a class="nearby-btn food" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`飲食店 ${s.name}`)}" target="_blank" rel="noopener">🍴<span>周辺の飲食店</span></a>
       </div>
