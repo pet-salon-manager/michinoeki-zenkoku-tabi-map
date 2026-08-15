@@ -538,7 +538,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
       <div class="nearby-title">周辺を探す</div>
       <div class="nearby-grid">
-        <a class="nearby-btn hotel" href="#" onclick="event.preventDefault();const t=document.getElementById('hotelToggle');t.checked=true;t.dispatchEvent(new Event('change',{bubbles:true}));map.setView([${lat},${lon}],11);map.once('moveend',()=>renderHotelsForViewport());">🏨<span>この道の駅周辺のホテルを見る</span></a>
+        <a class="nearby-btn hotel" href="#" onclick="event.preventDefault();const t=document.getElementById('hotelToggle');t.checked=true;t.dispatchEvent(new Event('change',{bubbles:true}));map.closePopup();setTimeout(()=>{map.flyTo([${lat},${lon}],13,{animate:true,duration:.6});map.once('moveend',()=>renderHotelsForViewport());},150);">🏨<span>この道の駅周辺のホテルを見る</span></a>
         <a class="nearby-btn onsen" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`温泉 ${s.name}`)}" target="_blank" rel="noopener">♨️<span>周辺の温泉</span></a>
         <a class="nearby-btn food" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`飲食店 ${s.name}`)}" target="_blank" rel="noopener">🍴<span>周辺の飲食店</span></a>
       </div>
