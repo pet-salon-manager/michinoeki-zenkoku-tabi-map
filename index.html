@@ -489,6 +489,27 @@ body{overflow-y:auto!important;overflow-x:hidden!important}
 .station-memo-open{display:block;width:100%;margin-top:10px;padding:12px 14px;border:0;border-radius:12px;background:#2f6f44;color:#fff;font-size:15px;font-weight:900}
 .station-memo-preview{margin-top:8px;padding:10px 12px;border-radius:10px;background:#f7f3eb;color:#5b554c;font-size:12px;line-height:1.45;white-space:pre-wrap}
 
+
+/* 地図を大きく見ている時に、上部のタイトル・検索欄へすぐ戻るボタン */
+.show-top-menu-btn{
+  grid-column:1/-1!important;
+  width:100%!important;
+  min-height:42px!important;
+  border:1px solid #9fbea5!important;
+  border-radius:12px!important;
+  background:#f7fff7!important;
+  color:#2f6f44!important;
+  font-size:13px!important;
+  font-weight:900!important;
+  padding:9px 12px!important;
+  box-shadow:0 2px 8px rgba(47,111,68,.12)!important;
+  touch-action:manipulation!important;
+}
+.show-top-menu-btn:active{transform:scale(.99)}
+.rail-fixed-title{grid-column:1/-1!important;text-align:center!important}
+.rail-fixed-bar{grid-template-columns:1fr 1fr!important}
+body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -502,7 +523,7 @@ body{overflow-y:auto!important;overflow-x:hidden!important}
 
 </head>
 <body>
-<div class="app"><header><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1>道の駅 全国旅マップ</h1><div class="sub">道の駅・鉄道駅・宿泊施設を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
+<div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1>道の駅 全国旅マップ</h1><div class="sub">道の駅・鉄道駅・宿泊施設を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
   <div class="search"><input id="searchInput" type="search" placeholder="道の駅・都道府県・市町村・メモを検索" autocomplete="off" /></div>
   <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
     <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
@@ -518,6 +539,7 @@ body{overflow-y:auto!important;overflow-x:hidden!important}
 </div>
 <div class="map-mini-legend"><span>● 道の駅</span>　<span style="color:#c46f2f">● 鉄道駅</span>　<span style="color:#1976d2">● 現在地</span></div><div id="map"></div><div class="status" id="status">地図上の位置を読み込んでいます…</div><div class="notice" id="notice"></div></div></div>
 <div class="rail-fixed-bar">
+  <button type="button" class="show-top-menu-btn" onclick="showTopMenu()" aria-label="上部のタイトルと検索欄を表示">⬆️ 上部のタイトル・検索欄を表示</button>
   <span class="rail-fixed-title">地図表示</span>
   <label class="rail-switch" title="全国の鉄道駅を表示・非表示">
   <input id="railToggle" type="checkbox">
@@ -1120,6 +1142,24 @@ if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.ser
     }
   }catch(e){}
 })();
+</script>
+
+
+<script>
+function showTopMenu(){
+  try{
+    if(window.map && typeof map.closePopup === 'function') map.closePopup();
+  }catch(e){}
+  const top = document.getElementById('appTop') || document.querySelector('header');
+  if(top){
+    try{ top.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ top.scrollIntoView(true); }
+  }
+  setTimeout(()=>{
+    try{ window.scrollTo({top:0,left:0,behavior:'smooth'}); }catch(e){ window.scrollTo(0,0); }
+    const q=document.getElementById('searchInput');
+    if(q) setTimeout(()=>{ try{ q.focus({preventScroll:true}); q.blur(); }catch(e){} },350);
+  },80);
+}
 </script>
 
 </body></html>
