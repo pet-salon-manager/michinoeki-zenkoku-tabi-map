@@ -806,10 +806,20 @@ function hotelPopup(h){
   const review=h.reviewAverage!=null&&Number(h.reviewAverage)>0?`<br>楽天評価：${Number(h.reviewAverage).toFixed(2)}`:'';
   const tel=h.telephoneNo?`<br>☎ ${esc(h.telephoneNo)}`:'';
   const mapQ=encodeURIComponent(`${h.name||''} ${h.address||''}`);
-  const distance=(currentLat!=null && currentLon!=null)
-  ? haversineKm(currentLat,currentLon,h._lat,h._lon)
-  : null;
+  const hasCurrentPosition =
+  typeof currentLat !== 'undefined' &&
+  typeof currentLon !== 'undefined' &&
+  Number.isFinite(Number(currentLat)) &&
+  Number.isFinite(Number(currentLon));
 
+const distance = hasCurrentPosition
+  ? haversineKm(
+      Number(currentLat),
+      Number(currentLon),
+      h._lat,
+      h._lon
+    )
+  : null;
 const distanceHtml=Number.isFinite(distance)
   ? `<br>📏 現在地から約 ${distance.toFixed(1)} km`
   : '';
