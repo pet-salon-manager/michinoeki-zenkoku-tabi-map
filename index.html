@@ -513,7 +513,7 @@ function setStatus(msg,ms=0){
   el.textContent=msg; el.classList.remove('hidden');
   if(ms)setTimeout(()=>el.classList.add('hidden'),ms);
 }
-function popup(s){
+function popup(s,lat,lon){
   const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
 const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
 
@@ -538,7 +538,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
       <div class="nearby-title">周辺を探す</div>
       <div class="nearby-grid">
-        <a class="nearby-btn hotel" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`ホテル ${s.name}`)}" target="_blank" rel="noopener">🏨<span>周辺の宿</span></a>
+        <a class="nearby-btn hotel" href="#" onclick="event.preventDefault();hotelVisible=true;document.getElementById('hotelToggle').checked=true;document.getElementById('hotelToggleState').textContent='ON';map.setView([${lat},${lon}],11);renderHotelsForViewport();">🏨<span>この道の駅周辺のホテルを見る</span></a>
         <a class="nearby-btn onsen" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`温泉 ${s.name}`)}" target="_blank" rel="noopener">♨️<span>周辺の温泉</span></a>
         <a class="nearby-btn food" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`飲食店 ${s.name}`)}" target="_blank" rel="noopener">🍴<span>周辺の飲食店</span></a>
       </div>
@@ -639,7 +639,7 @@ function drawStationMarkers(shown){
     const marker=L.marker([lat,lon],{icon:stationIcon,title:st.name,keyboard:true,riseOnHover:true}).addTo(layer);
     marker.on('click',()=>{
       L.popup({maxWidth:300,autoPan:true,closeButton:true,offset:[0,-22]})
-       .setLatLng([lat,lon]).setContent(popup(st)).openOn(map);
+       .setLatLng([lat,lon]).setContent(popup(st,lat,lon)).openOn(map);
     });
   });
 }
