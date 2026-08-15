@@ -495,22 +495,8 @@ function setStatus(msg,ms=0){
   if(ms)setTimeout(()=>el.classList.add('hidden'),ms);
 }
 function popup(s){
-  const rawOfficial = (s.url || '').trim();
-
-let officialUrl = '';
-if (rawOfficial) {
-  if (/^https?:\/\//i.test(rawOfficial)) {
-    officialUrl = rawOfficial;
-  } else if (/^www\./i.test(rawOfficial)) {
-    officialUrl = 'https://' + rawOfficial;
-  }
-}
-
-const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
-
-const homepage = officialUrl
-  ? `<a class="popup-homepage" href="${esc(officialUrl)}" target="_blank" rel="noopener">🌐 公式サイト</a>`
-  : `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
+  const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
+const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
 
   const socialQuery = encodeURIComponent(`道の駅${s.name}`);
   const xUrl = `https://x.com/search?q=${socialQuery}&src=typed_query`;
