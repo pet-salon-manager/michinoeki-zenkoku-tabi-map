@@ -563,7 +563,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
       <div class="nearby-title">周辺を探す</div>
       <div class="nearby-grid">
-        <a class="nearby-btn hotel" href="#" onclick="event.preventDefault();event.stopPropagation();showNearbyHotels(${lat},${lon});return false;">🏨<span>この道の駅周辺のホテルを見る</span></a>
+        <a class="nearby-btn hotel" href="javascript:void(0)" onclick="showNearbyHotels(${lat},${lon});return false;">🏨<span>この道の駅周辺のホテルを見る</span></a>
         <a class="nearby-btn onsen" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`温泉 ${s.name}`)}" target="_blank" rel="noopener">♨️<span>周辺の温泉</span></a>
         <a class="nearby-btn food" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`飲食店 ${s.name}`)}" target="_blank" rel="noopener">🍴<span>周辺の飲食店</span></a>
       </div>
