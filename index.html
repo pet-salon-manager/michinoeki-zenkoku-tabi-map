@@ -786,16 +786,36 @@ function pickHotelsEvenly(items,limit,bounds){
   }
   return out.slice(0,limit);
 }
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
 
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 function hotelPopup(h){
   const u=h.hotelInformationUrl || h.planListUrl || '';
   const price=h.hotelMinCharge!=null?`<br>料金目安：¥${Number(h.hotelMinCharge).toLocaleString('ja-JP')}〜`:'';
   const review=h.reviewAverage!=null&&Number(h.reviewAverage)>0?`<br>楽天評価：${Number(h.reviewAverage).toFixed(2)}`:'';
   const tel=h.telephoneNo?`<br>☎ ${esc(h.telephoneNo)}`:'';
   const mapQ=encodeURIComponent(`${h.name||''} ${h.address||''}`);
+  const distance=(currentLat!=null && currentLon!=null)
+  ? haversineKm(currentLat,currentLon,h._lat,h._lon)
+  : null;
+
+const distanceHtml=Number.isFinite(distance)
+  ? `<br>📏 現在地から約 ${distance.toFixed(1)} km`
+  : '';
   return `<div class="hotel-popup">
     <div style="font-weight:900;font-size:16px;color:#355b88">🏨 ${esc(h.name||'宿泊施設')}</div>
-    <div style="font-size:12px;color:#666;margin-top:4px">${esc(h.address||'')}${tel}${price}${review}</div>
+    <div style="font-size:12px;color:#666;margin-top:4px">${esc(h.address||'')}${tel}${price}${review}${distanceHtml}
     <div class="hotel-actions">
       ${u?`<a class="hotel-book" href="${esc(u)}" target="_blank" rel="noopener">楽天トラベルで詳細・予約</a>`:''}
       <a class="hotel-route" href="https://www.google.com/maps/search/?api=1&query=${mapQ}" target="_blank" rel="noopener">Googleマップで見る</a>
