@@ -1,0 +1,24 @@
+{
+  "name": "道の駅 全国旅マップ",
+  "short_name": "道の駅 全国旅マップ",
+  "start_url": "./?app=zenkoku-tabi-v2",
+  "display": "standalone",
+  "background_color": "#fffaf0",
+  "theme_color": "#fff7e9",
+  "icons": [
+    {
+      "src": "./icon-roadstation-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-roadstation-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "./?app=zenkoku-tabi-v2",
+  "scope": "./"
+}
