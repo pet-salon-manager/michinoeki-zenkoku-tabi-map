@@ -895,6 +895,16 @@ let railVisible=false;
 function railPopup(r){
   const tq=encodeURIComponent(`${r.n} ${r.l||''} 時刻表`);
   const gq=encodeURIComponent(`${r.n}駅`);
+  const lat=Number(r.la),lon=Number(r.lo);
+  const routeHtml=(Number.isFinite(lat)&&Number.isFinite(lon)) ? `
+    <div class="popup-route-title">📍 現在地からこの駅への行き方</div>
+    <div class="popup-route-grid">
+      <button type="button" onclick="routeToStation(${lat},${lon},'d')">🚗<span>車</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'w')">🚶<span>徒歩</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'r')">🚆<span>公共交通</span></button>
+    </div>
+    <button type="button" onclick="routeToStationGoogle(${lat},${lon})" style="width:100%;margin-top:7px;padding:10px;border:1px solid #cfd7cf;border-radius:10px;background:#fff;color:#285b3b;font-weight:800;font-size:13px">Googleマップでルート</button>
+  ` : '';
   return `<div class="rail-station-popup">
     <div class="rail-station-name">🚉 ${esc(r.n)}</div>
     <div class="rail-station-meta">${esc(r.l||'路線情報なし')}<br>${esc(r.o||'事業者情報なし')}</div>
@@ -902,6 +912,7 @@ function railPopup(r){
       <a class="rail-timetable-btn" href="https://www.google.com/search?q=${tq}" target="_blank" rel="noopener">🕐 時刻表を見る</a>
       <a class="rail-map-btn" href="https://www.google.com/maps/search/?api=1&query=${gq}" target="_blank" rel="noopener">📍 地図で見る</a>
     </div>
+    ${routeHtml}
   </div>`;
 }
 function renderRails(){
