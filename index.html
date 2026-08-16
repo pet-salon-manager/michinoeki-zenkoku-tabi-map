@@ -510,6 +510,31 @@ body{overflow-y:auto!important;overflow-x:hidden!important}
 .rail-fixed-bar{grid-template-columns:1fr 1fr!important}
 body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 
+
+/* ===== 住所付き飲食店（OpenStreetMap / Overpass） ===== */
+.restaurant-switch{
+  display:flex;align-items:center;gap:4px;background:#fff!important;
+  border:1px solid var(--line,#ddd5c4)!important;border-radius:16px!important;
+  padding:8px 5px!important;margin:0!important;font-size:11px;font-weight:800;
+  color:#7b4c2b;box-shadow:0 4px 12px rgba(63,54,41,.06)!important;
+  min-width:0!important;justify-content:center!important
+}
+.restaurant-switch input{position:absolute;opacity:0;pointer-events:none}
+.restaurant-switch-ui{width:32px;height:20px;border-radius:999px;background:#cbc6b8;position:relative;transition:.2s;flex:0 0 auto}
+.restaurant-switch-ui:after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;left:2px;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:.2s}
+.restaurant-switch input:checked + .restaurant-switch-ui{background:#d46a3a}
+.restaurant-switch input:checked + .restaurant-switch-ui:after{left:14px}
+.restaurant-switch-label{font-size:10px!important;white-space:nowrap;color:#b3542d!important}
+.restaurant-switch-state{font-size:10px;padding:2px 5px;border-radius:999px;background:#f3eee4;color:#887865}
+.restaurant-switch input:checked ~ .restaurant-switch-state{background:#fff0e8;color:#a34725}
+.rail-fixed-bar{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.rail-fixed-bar .show-top-menu-btn,.rail-fixed-bar .rail-fixed-title{grid-column:1/-1!important}
+.restaurant-popup{min-width:220px;max-width:290px;color:#4a321f}
+.restaurant-popup-name{font-weight:900;font-size:16px;color:#9b4b2a;margin-bottom:5px}
+.restaurant-popup-meta{font-size:12px;color:#666;line-height:1.55}
+.restaurant-popup a{display:block;margin-top:8px;padding:9px 10px;border-radius:10px;text-align:center;text-decoration:none;font-weight:900}
+.restaurant-map-link{background:#fff3e8;color:#a44b24;border:1px solid #efd0bd}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -552,6 +577,12 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
   <span class="hotel-switch-ui"></span>
   <span class="hotel-switch-label">🏨 宿泊施設</span>
   <span class="hotel-switch-state" id="hotelToggleState">OFF</span>
+</label>
+<label class="restaurant-switch" title="住所が登録されている飲食店を表示・非表示">
+  <input id="restaurantToggle" type="checkbox">
+  <span class="restaurant-switch-ui"></span>
+  <span class="restaurant-switch-label">🍴 飲食店</span>
+  <span class="restaurant-switch-state" id="restaurantToggleState">OFF</span>
 </label>
 </div>
 <div class="source-footer" aria-label="データ出典">
@@ -814,6 +845,108 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,att
 const layer=L.layerGroup().addTo(map); window.__stationLayer=layer;
 const hotelLayer=L.layerGroup().addTo(map);
 let hotelVisible=false;
+
+const restaurantLayer=L.layerGroup().addTo(map);
+let restaurantVisible=false;
+let restaurantRenderTimer=null;
+let restaurantAbortController=null;
+
+function restaurantTypeJa(v){
+  return ({restaurant:'レストラン',cafe:'カフェ',fast_food:'ファストフード'})[v] || '飲食店';
+}
+function buildOsmAddress(tags={}){
+  if(tags['addr:full']) return String(tags['addr:full']).trim();
+  const parts=[
+    tags['addr:postcode'],
+    tags['addr:province'] || tags['addr:prefecture'],
+    tags['addr:city'],
+    tags['addr:suburb'],
+    tags['addr:quarter'],
+    tags['addr:neighbourhood'],
+    tags['addr:street'],
+    tags['addr:block_number'],
+    tags['addr:housenumber']
+  ].filter(Boolean).map(v=>String(v).trim());
+  return [...new Set(parts)].join(' ');
+}
+function restaurantPopup(r){
+  const q=encodeURIComponent(`${r.name} ${r.address}`);
+  const hours=r.openingHours?`<br>🕐 ${esc(r.openingHours)}`:'';
+  const phone=r.phone?`<br>☎ ${esc(r.phone)}`:'';
+  return `<div class="restaurant-popup">
+    <div class="restaurant-popup-name">🍴 ${esc(r.name)}</div>
+    <div class="restaurant-popup-meta">${esc(restaurantTypeJa(r.type))}<br>📍 ${esc(r.address)}${hours}${phone}</div>
+    <a class="restaurant-map-link" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Googleマップで見る</a>
+  </div>`;
+}
+function scheduleRestaurantRender(){
+  clearTimeout(restaurantRenderTimer);
+  restaurantRenderTimer=setTimeout(()=>renderRestaurantsForViewport(),500);
+}
+async function renderRestaurantsForViewport(){
+  if(!restaurantVisible){restaurantLayer.clearLayers();return;}
+  const zoom=map.getZoom();
+  if(zoom<11){
+    restaurantLayer.clearLayers();
+    setStatus('🍴 飲食店を見るには地図をもう少し拡大してください',2200);
+    return;
+  }
+  const b=map.getBounds();
+  const south=b.getSouth().toFixed(6), west=b.getWest().toFixed(6);
+  const north=b.getNorth().toFixed(6), east=b.getEast().toFixed(6);
+  const query=`[out:json][timeout:20];
+(
+  nwr["amenity"~"^(restaurant|cafe|fast_food)$"]["name"](${south},${west},${north},${east});
+);
+out center tags;`;
+  try{
+    if(restaurantAbortController) restaurantAbortController.abort();
+    restaurantAbortController=new AbortController();
+    setStatus('🍴 住所付き飲食店を取得しています…',0);
+    const res=await fetch('https://overpass-api.de/api/interpreter',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:'data='+encodeURIComponent(query),
+      signal:restaurantAbortController.signal
+    });
+    if(!res.ok) throw new Error('Overpass '+res.status);
+    const data=await res.json();
+    const rows=[];
+    for(const el of (data.elements||[])){
+      const tags=el.tags||{};
+      const address=buildOsmAddress(tags);
+      if(!address) continue;
+      const lat=Number(el.lat ?? el.center?.lat);
+      const lon=Number(el.lon ?? el.center?.lon);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)) continue;
+      rows.push({
+        name:tags.name||'飲食店',
+        type:tags.amenity||'restaurant',
+        address,
+        openingHours:tags.opening_hours||'',
+        phone:tags.phone||tags['contact:phone']||'',
+        lat,lon
+      });
+    }
+    restaurantLayer.clearLayers();
+    const shown=rows.slice(0,180);
+    for(const r of shown){
+      L.circleMarker([r.lat,r.lon],{
+        renderer:window.__stationRenderer,
+        radius:zoom>=14?6:5,
+        weight:1.5,
+        color:'#ffffff',
+        fillColor:'#d46a3a',
+        fillOpacity:.95
+      }).bindPopup(restaurantPopup(r),{maxWidth:300}).addTo(restaurantLayer);
+    }
+    setStatus(`🍴 住所付き飲食店 ${rows.length.toLocaleString('ja-JP')}件中 ${shown.length.toLocaleString('ja-JP')}件表示`,2000);
+  }catch(e){
+    if(e?.name==='AbortError') return;
+    restaurantLayer.clearLayers();
+    setStatus('飲食店情報を取得できませんでした。少し時間を置いて再度お試しください',3000);
+  }
+}
 
 function getRakutenId(){ return localStorage.getItem('rakutenApplicationId') || ''; }
 
@@ -1122,9 +1255,24 @@ hotelToggle?.addEventListener('change',()=>{
     setStatus('宿泊施設を非表示にしました',1400);
   }
 });
+const restaurantToggle=document.getElementById('restaurantToggle');
+const restaurantToggleState=document.getElementById('restaurantToggleState');
+restaurantToggle?.addEventListener('change',()=>{
+  restaurantVisible=restaurantToggle.checked;
+  restaurantToggleState.textContent=restaurantVisible?'ON':'OFF';
+  if(restaurantVisible){
+    renderRestaurantsForViewport();
+  }else{
+    if(restaurantAbortController) restaurantAbortController.abort();
+    restaurantLayer.clearLayers();
+    setStatus('飲食店を非表示にしました',1400);
+  }
+});
+
 map.on('moveend zoomend',()=>{
   scheduleStationRender();
   if(hotelVisible)scheduleHotelViewportRender();
+  if(restaurantVisible)scheduleRestaurantRender();
 });
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
