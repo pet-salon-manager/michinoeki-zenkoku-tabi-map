@@ -547,9 +547,12 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 
 
 /* 道の駅詳細：2本指ピンチで拡大・縮小 */
-.station-popup-pinch-hint{margin:6px 0 2px;text-align:right;font-size:10px;font-weight:800;color:#7b7b72;user-select:none;-webkit-user-select:none}
+.station-popup-pinch-hint{margin:6px 0 4px;text-align:center;font-size:10px;font-weight:800;color:#7b7b72;user-select:none;-webkit-user-select:none}
+.station-popup-size-tools{display:flex;gap:6px;justify-content:center;align-items:center;margin:4px 0 8px}
+.station-popup-size-tools button{border:1px solid #b9c9bc;background:#f7fbf7;color:#285d39;border-radius:9px;padding:6px 10px;font-size:14px;font-weight:900;line-height:1;min-width:44px}
 .leaflet-popup.station-pinch-active .leaflet-popup-content-wrapper{will-change:transform;transition:none!important}
 .leaflet-popup.station-pinch-active .leaflet-popup-tip{transition:none!important}
+.leaflet-popup .leaflet-popup-content-wrapper{-webkit-user-select:none;user-select:none}
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -750,7 +753,12 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
     <div class="station-popup">
       <div class="popup-name">${esc(s.name)}</div>
       <div class="popup-meta">${esc(s.pref)} ${esc(s.loc||'')}</div>
-      <div class="station-popup-pinch-hint">🤏 2本指で説明欄の大きさを変更</div>
+      <div class="station-popup-pinch-hint">🤏 2本指で拡大・縮小できます</div>
+      <div class="station-popup-size-tools">
+        <button type="button" onclick="stationPopupZoom(-0.1,event)">−</button>
+        <button type="button" onclick="stationPopupZoom(0,event)">標準</button>
+        <button type="button" onclick="stationPopupZoom(0.1,event)">＋</button>
+      </div>
       ${s.approx?'<div class="popup-reg">※ピン位置は概略です</div>':''}
       ${homepage}
 
@@ -1383,5 +1391,78 @@ function showTopMenu(){
 }
 </script>
 
-\n<script>\n/* 道の駅の説明ポップアップを2本指のピンチで拡大・縮小する */\n(function(){\n  let pinch = null;\n  const MIN_SCALE = 0.70;\n  const MAX_SCALE = 1.35;\n\n  function dist(t1,t2){\n    const dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;\n    return Math.hypot(dx,dy);\n  }\n  function stationPopupFromTarget(target){\n    const popup=target && target.closest ? target.closest('.leaflet-popup') : null;\n    if(!popup || !popup.querySelector('.station-popup')) return null;\n    return popup;\n  }\n  function wrapperOf(popup){ return popup ? popup.querySelector('.leaflet-popup-content-wrapper') : null; }\n  function tipOf(popup){ return popup ? popup.querySelector('.leaflet-popup-tip') : null; }\n\n  document.addEventListener('touchstart', function(e){\n    if(e.touches.length!==2) return;\n    const popup=stationPopupFromTarget(e.target);\n    if(!popup) return;\n    const wrap=wrapperOf(popup);\n    if(!wrap) return;\n    const current=parseFloat(popup.dataset.pinchScale||'1')||1;\n    pinch={popup,wrap,tip:tipOf(popup),startDistance:dist(e.touches[0],e.touches[1]),startScale:current};\n    popup.classList.add('station-pinch-active');\n    try{ if(window.map && map.touchZoom && map.touchZoom.enabled()) map.touchZoom.disable(); }catch(_){}\n    e.preventDefault();\n  },{passive:false,capture:true});\n\n  document.addEventListener('touchmove', function(e){\n    if(!pinch || e.touches.length!==2) return;\n    const d=dist(e.touches[0],e.touches[1]);\n    if(!pinch.startDistance) return;\n    let scale=pinch.startScale*(d/pinch.startDistance);\n    scale=Math.max(MIN_SCALE,Math.min(MAX_SCALE,scale));\n    pinch.popup.dataset.pinchScale=String(scale);\n    pinch.wrap.style.transformOrigin='50% 100%';\n    pinch.wrap.style.transform='scale('+scale+')';\n    if(pinch.tip){\n      pinch.tip.style.transformOrigin='50% 0%';\n      pinch.tip.style.transform='scale('+Math.max(.85,Math.min(1.15,scale))+') rotate(45deg)';\n    }\n    e.preventDefault();\n  },{passive:false,capture:true});\n\n  function finishPinch(){\n    if(!pinch) return;\n    pinch.popup.classList.remove('station-pinch-active');\n    pinch=null;\n    setTimeout(()=>{ try{ if(window.map && map.touchZoom && !map.touchZoom.enabled()) map.touchZoom.enable(); }catch(_){} },120);\n  }\n  document.addEventListener('touchend',finishPinch,{passive:true,capture:true});\n  document.addEventListener('touchcancel',finishPinch,{passive:true,capture:true});\n\n  /* 新しい道の駅ポップアップを開いた時は標準サイズから開始 */\n  try{\n    if(window.map && typeof map.on==='function') map.on('popupopen',function(ev){\n      const popup=ev.popup && ev.popup.getElement ? ev.popup.getElement() : null;\n      if(!popup || !popup.querySelector('.station-popup')) return;\n      popup.dataset.pinchScale='1';\n      const wrap=wrapperOf(popup);\n      const tip=tipOf(popup);\n      if(wrap){wrap.style.transform='scale(1)';wrap.style.transformOrigin='50% 100%';}\n      if(tip){tip.style.transform='';tip.style.transformOrigin='';}\n    });\n  }catch(_){}\n})();\n</script>\n
+
+<script>
+/* 道の駅の説明ポップアップ：iPhone Safariのピンチ＋ボタンで拡大縮小 */
+(function(){
+  const MIN_SCALE=0.68, MAX_SCALE=1.38;
+  let touchState=null, gestureState=null;
+
+  function clamp(v){ return Math.max(MIN_SCALE,Math.min(MAX_SCALE,v)); }
+  function popupFromTarget(t){
+    const p=t&&t.closest?t.closest('.leaflet-popup'):null;
+    return p&&p.querySelector('.station-popup')?p:null;
+  }
+  function apply(popup,scale){
+    if(!popup)return;
+    scale=clamp(scale);
+    popup.dataset.pinchScale=String(scale);
+    const wrap=popup.querySelector('.leaflet-popup-content-wrapper');
+    if(!wrap)return;
+    wrap.style.transformOrigin='50% 100%';
+    wrap.style.transform='scale('+scale+')';
+    const tip=popup.querySelector('.leaflet-popup-tip');
+    if(tip){ tip.style.transformOrigin='50% 0%'; }
+  }
+  function current(popup){ return parseFloat(popup?.dataset?.pinchScale||'1')||1; }
+
+  window.stationPopupZoom=function(delta,ev){
+    if(ev){ev.preventDefault();ev.stopPropagation();}
+    let popup=popupFromTarget(ev?.target); if(!popup){ for(const p of document.querySelectorAll('.leaflet-popup')){ if(p.querySelector('.station-popup')){popup=p;break;} } }
+    if(!popup)return false;
+    apply(popup,delta===0?1:current(popup)+delta);
+    return false;
+  };
+
+  function distance(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+
+  document.addEventListener('touchstart',function(e){
+    if(e.touches.length!==2)return;
+    const popup=popupFromTarget(e.target); if(!popup)return;
+    touchState={popup,startD:distance(e.touches[0],e.touches[1]),startS:current(popup)};
+    popup.classList.add('station-pinch-active');
+    e.preventDefault();
+  },{capture:true,passive:false});
+  document.addEventListener('touchmove',function(e){
+    if(!touchState||e.touches.length!==2)return;
+    const d=distance(e.touches[0],e.touches[1]);
+    if(touchState.startD>0)apply(touchState.popup,touchState.startS*(d/touchState.startD));
+    e.preventDefault();
+  },{capture:true,passive:false});
+  function endTouch(){if(touchState){touchState.popup.classList.remove('station-pinch-active');touchState=null;}}
+  document.addEventListener('touchend',endTouch,{capture:true,passive:true});
+  document.addEventListener('touchcancel',endTouch,{capture:true,passive:true});
+
+  /* iOS Safariではgestureイベントが最も安定するため併用 */
+  document.addEventListener('gesturestart',function(e){
+    const popup=popupFromTarget(e.target); if(!popup)return;
+    gestureState={popup,startS:current(popup)}; popup.classList.add('station-pinch-active');
+    e.preventDefault();
+  },{capture:true,passive:false});
+  document.addEventListener('gesturechange',function(e){
+    if(!gestureState)return;
+    apply(gestureState.popup,gestureState.startS*(Number(e.scale)||1));
+    e.preventDefault();
+  },{capture:true,passive:false});
+  document.addEventListener('gestureend',function(e){
+    if(!gestureState)return; gestureState.popup.classList.remove('station-pinch-active'); gestureState=null; e.preventDefault();
+  },{capture:true,passive:false});
+
+  /* ポップアップが開いたら標準サイズに戻す */
+  document.addEventListener('click',function(e){
+    if(e.target.closest('.leaflet-popup-close-button')){ touchState=null; gestureState=null; }
+  },true);
+})();
+</script>
+
 </body></html>
