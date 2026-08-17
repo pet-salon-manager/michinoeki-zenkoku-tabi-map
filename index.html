@@ -753,12 +753,6 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
     <div class="station-popup">
       <div class="popup-name">${esc(s.name)}</div>
       <div class="popup-meta">${esc(s.pref)} ${esc(s.loc||'')}</div>
-      <div class="station-popup-pinch-hint">🤏 2本指で拡大・縮小できます</div>
-      <div class="station-popup-size-tools">
-        <button type="button" onclick="stationPopupZoom(-0.1,event)">−</button>
-        <button type="button" onclick="stationPopupZoom(0,event)">標準</button>
-        <button type="button" onclick="stationPopupZoom(0.1,event)">＋</button>
-      </div>
       ${s.approx?'<div class="popup-reg">※ピン位置は概略です</div>':''}
       ${homepage}
 
