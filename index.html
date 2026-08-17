@@ -330,6 +330,11 @@ header{
   letter-spacing:.02em!important;
 }
 .title-wrap h1::first-letter{color:var(--green)!important}
+.title-wrap h1 .app-title-line{display:block;white-space:nowrap}
+.title-wrap h1 .app-title-map{margin-left:52px}
+.title-wrap h1 .app-title-station{color:var(--green)!important}
+.title-wrap h1::first-letter{color:inherit!important}
+
 .sub{
   color:#7a6a57!important;
   font-size:11px!important;
@@ -341,6 +346,7 @@ header{
   color:var(--green)!important;
   border-radius:999px!important;
   box-shadow:0 4px 12px rgba(75,83,56,.08)!important;
+  transform:translateY(-30px)!important;
 }
 .toolbar{padding:0 12px 12px!important}
 .search{
@@ -566,7 +572,7 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 
 </head>
 <body>
-<div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1>道の駅 全国旅マップ</h1><div class="sub">道の駅・鉄道駅・宿泊施設を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
+<div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
   <div class="search"><input id="searchInput" type="search" placeholder="道の駅・都道府県・市町村・メモを検索" autocomplete="off" /></div>
   <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
     <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
