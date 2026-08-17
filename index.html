@@ -44,6 +44,16 @@ button{border:0;border-radius:14px;min-height:42px;padding:0 13px;font-weight:80
 .station-popup .popup-meta{font-size:12px;color:#657064;margin-bottom:8px}
 .popup-homepage{min-height:24px;touch-action:manipulation;display:block;text-decoration:none;text-align:center;background:#edf4e7;color:#285b3b;font-weight:800;padding:9px 10px;border-radius:10px;margin:8px 0}
 .popup-nohome{font-size:12px;color:#8a8a7d;text-align:center;margin:8px 0}
+
+.station-weather-box{margin-top:12px;padding-top:10px;border-top:1px solid #e5e0d4}
+.station-weather-title{font-size:13px;font-weight:900;color:#4c554d;margin-bottom:7px}
+.station-weather-body{padding:10px 11px;border-radius:12px;background:#f7faf4;border:1px solid #dfe9da;color:#3f4b41;font-size:12px;line-height:1.5}
+.station-weather-current{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:900;font-size:14px}
+.station-weather-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.station-weather-day{padding:8px 5px;border-radius:10px;background:#fff;border:1px solid #e5eadf;text-align:center;font-size:11px;line-height:1.45}
+.station-weather-day b{display:block;font-size:11px;margin-bottom:2px}
+.station-weather-icon{font-size:20px;line-height:1.1}
+.station-weather-retry{display:block;width:100%;margin-top:7px;padding:8px 10px;border:1px solid #d8e3d3;border-radius:10px;background:#fff;color:#2f6f44;font-size:12px;font-weight:900}
 .popup-route-title{font-size:13px;font-weight:900;color:#4c554d;margin:10px 0 7px}
 .popup-route-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .popup-route-grid button{min-height:52px;touch-action:manipulation;border:0;border-radius:10px;background:#285b3b;color:white;padding:9px 4px 8px;font-size:18px;font-weight:800;line-height:1.05}
@@ -511,7 +521,7 @@ body{overflow-y:auto!important;overflow-x:hidden!important}
 body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 
 
-/* ===== 保存済み全国飲食店（OpenStreetMap） ===== */
+/* ===== 住所付き飲食店（OpenStreetMap / Overpass） ===== */
 .restaurant-switch{
   display:flex;align-items:center;gap:4px;background:#fff!important;
   border:1px solid var(--line,#ddd5c4)!important;border-radius:16px!important;
@@ -534,8 +544,6 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 .restaurant-popup-meta{font-size:12px;color:#666;line-height:1.55}
 .restaurant-popup a{display:block;margin-top:8px;padding:9px 10px;border-radius:10px;text-align:center;text-decoration:none;font-weight:900}
 .restaurant-map-link{background:#fff3e8;color:#a44b24;border:1px solid #efd0bd}
-.restaurant-cluster-count{background:transparent!important;border:0!important;box-shadow:none!important;color:#fff!important;font-size:11px!important;font-weight:900!important;padding:0!important}
-.restaurant-cluster-count:before{display:none!important}
 
 </style>
 
@@ -580,7 +588,7 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
   <span class="hotel-switch-label">🏨 宿泊施設</span>
   <span class="hotel-switch-state" id="hotelToggleState">OFF</span>
 </label>
-<label class="restaurant-switch" title="保存済みの全国飲食店を表示・非表示">
+<label class="restaurant-switch" title="住所が登録されている飲食店を表示・非表示">
   <input id="restaurantToggle" type="checkbox">
   <span class="restaurant-switch-ui"></span>
   <span class="restaurant-switch-label">🍴 飲食店</span>
@@ -669,10 +677,64 @@ function saveStationMemoPage(){
   return false;
 }
 
+
+const stationWeatherCache=new Map();
+function weatherInfo(code){
+  const c=Number(code);
+  if(c===0)return ['☀️','晴れ'];
+  if(c===1)return ['🌤️','ほぼ晴れ'];
+  if(c===2)return ['⛅','晴れ時々曇り'];
+  if(c===3)return ['☁️','曇り'];
+  if(c===45||c===48)return ['🌫️','霧'];
+  if([51,53,55,56,57].includes(c))return ['🌦️','霧雨'];
+  if([61,63,65,66,67].includes(c))return ['🌧️','雨'];
+  if([71,73,75,77].includes(c))return ['🌨️','雪'];
+  if([80,81,82].includes(c))return ['🌦️','にわか雨'];
+  if([85,86].includes(c))return ['🌨️','にわか雪'];
+  if([95,96,99].includes(c))return ['⛈️','雷雨'];
+  return ['🌤️','天気'];
+}
+function weatherDayLabel(i){
+  return i===0?'今日':i===1?'明日':'明後日';
+}
+function renderStationWeather(target,data){
+  const current=data.current||{};
+  const daily=data.daily||{};
+  const [curIcon,curText]=weatherInfo(current.weather_code);
+  const temp=Number.isFinite(Number(current.temperature_2m))?`${Math.round(Number(current.temperature_2m))}℃`:'--';
+  const days=(daily.time||[]).slice(0,3).map((_,i)=>{
+    const [icon,text]=weatherInfo((daily.weather_code||[])[i]);
+    const hi=Number.isFinite(Number((daily.temperature_2m_max||[])[i]))?Math.round(Number(daily.temperature_2m_max[i])):'--';
+    const lo=Number.isFinite(Number((daily.temperature_2m_min||[])[i]))?Math.round(Number(daily.temperature_2m_min[i])):'--';
+    const pop=Number.isFinite(Number((daily.precipitation_probability_max||[])[i]))?Math.round(Number(daily.precipitation_probability_max[i])):'--';
+    return `<div class="station-weather-day"><b>${weatherDayLabel(i)}</b><div class="station-weather-icon">${icon}</div>${esc(text)}<br>${hi}℃ / ${lo}℃<br>降水 ${pop}%</div>`;
+  }).join('');
+  target.innerHTML=`<div class="station-weather-current"><span class="station-weather-icon">${curIcon}</span><span>現在 ${esc(curText)} ${temp}</span></div><div class="station-weather-grid">${days}</div>`;
+}
+async function loadStationWeather(id,lat,lon,force=false){
+  const target=document.getElementById(`stationWeather-${id}`);
+  if(!target)return;
+  const key=`${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
+  if(!force&&stationWeatherCache.has(key)){ renderStationWeather(target,stationWeatherCache.get(key)); return; }
+  target.innerHTML='天気予報を取得しています…';
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=3`;
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const data=await r.json();
+    stationWeatherCache.set(key,data);
+    if(document.getElementById(`stationWeather-${id}`))renderStationWeather(target,data);
+  }catch(e){
+    target.innerHTML=`天気予報を取得できませんでした。<button type="button" class="station-weather-retry" onclick="loadStationWeather(${Number(id)},${Number(lat)},${Number(lon)},true)">再読み込み</button>`;
+  }
+}
+
 function popup(s,lat,lon){
   const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
 const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
   const stationMemo = getStationMemo(s.id);
+
+  setTimeout(()=>loadStationWeather(Number(s.id),Number(s.lat),Number(s.lon)),60);
 
   const socialQuery = encodeURIComponent(`道の駅${s.name}`);
   const xUrl = `https://x.com/search?q=${socialQuery}&src=typed_query`;
@@ -685,6 +747,11 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
       <div class="popup-meta">${esc(s.pref)} ${esc(s.loc||'')}</div>
       ${s.approx?'<div class="popup-reg">※ピン位置は概略です</div>':''}
       ${homepage}
+
+      <div class="station-weather-box">
+        <div class="station-weather-title">☀️ 天気予報</div>
+        <div class="station-weather-body" id="stationWeather-${Number(s.id)}">天気予報を取得しています…</div>
+      </div>
 
       <div class="popup-social-title">🔎 この道の駅をSNSで調べる</div>
       <div class="popup-social-grid">
@@ -851,116 +918,100 @@ let hotelVisible=false;
 const restaurantLayer=L.layerGroup().addTo(map);
 let restaurantVisible=false;
 let restaurantRenderTimer=null;
-let restaurantMaster=[];
-let restaurantLoadPromise=null;
+let RESTAURANT_MASTER=[];
+let restaurantMasterReady=false;
+let restaurantMasterError='';
 
 function restaurantTypeJa(v){
-  return ({restaurant:'レストラン',cafe:'カフェ',fast_food:'ファストフード',bar:'バー',pub:'パブ',food_court:'フードコート',ice_cream:'アイスクリーム',biergarten:'ビアガーデン',marketplace:'市場',bakery:'パン店',confectionery:'菓子店',deli:'惣菜店',coffee:'コーヒー店',tea:'お茶店'})[v] || '飲食店';
-}
-function buildOsmAddress(tags={}){
-  if(tags['addr:full']) return String(tags['addr:full']).trim();
-  const parts=[
-    tags['addr:postcode'],
-    tags['addr:province'] || tags['addr:prefecture'],
-    tags['addr:city'],
-    tags['addr:suburb'],
-    tags['addr:quarter'],
-    tags['addr:neighbourhood'],
-    tags['addr:street'],
-    tags['addr:block_number'],
-    tags['addr:housenumber']
-  ].filter(Boolean).map(v=>String(v).trim());
-  return [...new Set(parts)].join(' ');
+  return ({restaurant:'レストラン',cafe:'カフェ',fast_food:'ファストフード'})[v] || '飲食店';
 }
 function restaurantPopup(r){
-  const address=r.address||'住所情報なし';
-  const q=encodeURIComponent(`${r.name} ${r.address||`${r.lat},${r.lon}`}`);
+  const q=encodeURIComponent(`${r.name} ${r.address}`);
   const hours=r.openingHours?`<br>🕐 ${esc(r.openingHours)}`:'';
   const phone=r.phone?`<br>☎ ${esc(r.phone)}`:'';
+  const website=r.website?`<a class="restaurant-map-link" href="${esc(r.website)}" target="_blank" rel="noopener">公式サイト</a>`:'';
+  const lat=Number(r.lat), lon=Number(r.lon);
+  const routeHtml=(Number.isFinite(lat)&&Number.isFinite(lon)) ? `
+    <div class="popup-route-title" style="margin-top:10px">📍 現在地からの移動方法</div>
+    <div class="popup-route-grid">
+      <button type="button" onclick="routeToStation(${lat},${lon},'d')">🚗<span>車</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'w')">🚶<span>徒歩</span></button>
+      <button type="button" onclick="routeToStation(${lat},${lon},'r')">🚌<span>公共交通</span></button>
+    </div>
+    <button type="button" onclick="routeToStationGoogle(${lat},${lon})" style="width:100%;margin-top:7px;padding:10px;border:1px solid #e7c8b7;border-radius:10px;background:#fff;color:#9b4b2a;font-weight:800;font-size:13px">Googleマップでルート</button>
+  ` : '';
   return `<div class="restaurant-popup">
     <div class="restaurant-popup-name">🍴 ${esc(r.name)}</div>
-    <div class="restaurant-popup-meta">${esc(restaurantTypeJa(r.type))}<br>📍 ${esc(address)}${hours}${phone}</div>
+    <div class="restaurant-popup-meta">${esc(restaurantTypeJa(r.type))}<br>📍 ${esc(r.address)}${hours}${phone}</div>
+    ${website}
     <a class="restaurant-map-link" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Googleマップで見る</a>
+    ${routeHtml}
   </div>`;
-}
-async function loadRestaurantMaster(){
-  if(restaurantMaster.length)return restaurantMaster;
-  if(restaurantLoadPromise)return restaurantLoadPromise;
-  restaurantLoadPromise=Promise.all([
-    fetch('./restaurants-1.json').then(r=>{if(!r.ok)throw new Error('restaurants-1.json');return r.json()}),
-    fetch('./restaurants-2.json').then(r=>{if(!r.ok)throw new Error('restaurants-2.json');return r.json()})
-  ]).then(parts=>{
-    const byId=new Map();
-    for(const r of parts.flat()){
-      const lat=Number(r.lat),lon=Number(r.lon);
-      if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-      const key=r.id||`${r.name}|${lat.toFixed(6)}|${lon.toFixed(6)}`;
-      byId.set(key,{...r,lat,lon,address:r.address||''});
-    }
-    restaurantMaster=[...byId.values()];
-    return restaurantMaster;
-  }).catch(e=>{restaurantLoadPromise=null;throw e});
-  return restaurantLoadPromise;
-}
-function restaurantLimitForZoom(z){
-  if(z<=11)return 180;
-  if(z<=13)return 500;
-  return 1000;
-}
-function clusterRestaurants(rows,zoom){
-  if(zoom>=14)return rows.map(r=>({lat:r.lat,lon:r.lon,rows:[r]}));
-  const cell=zoom<=11?64:48,groups=new Map();
-  for(const r of rows){
-    const p=map.latLngToContainerPoint([r.lat,r.lon]);
-    const key=`${Math.floor(p.x/cell)}:${Math.floor(p.y/cell)}`;
-    let g=groups.get(key);
-    if(!g){g={lat:0,lon:0,rows:[]};groups.set(key,g)}
-    g.lat+=r.lat;g.lon+=r.lon;g.rows.push(r);
-  }
-  return [...groups.values()].map(g=>({...g,lat:g.lat/g.rows.length,lon:g.lon/g.rows.length}));
 }
 function scheduleRestaurantRender(){
   clearTimeout(restaurantRenderTimer);
   restaurantRenderTimer=setTimeout(()=>renderRestaurantsForViewport(),250);
 }
-async function renderRestaurantsForViewport(){
+async function loadRestaurantMaster(){
+  if(restaurantMasterReady || restaurantMasterError) return;
+  try{
+    const tryJson=async(url)=>{
+      const r=await fetch(url,{cache:'no-store'});
+      if(!r.ok) throw new Error(String(r.status));
+      const d=await r.json();
+      return Array.isArray(d)?d:(Array.isArray(d?.restaurants)?d.restaurants:[]);
+    };
+    let rows=[];
+    try{
+      const [a,b]=await Promise.all([tryJson('./restaurants-1.json'),tryJson('./restaurants-2.json')]);
+      rows=[...a,...b];
+    }catch(_){
+      rows=await tryJson('./restaurants.json');
+    }
+    RESTAURANT_MASTER=rows.filter(r=>r && r.address && Number.isFinite(Number(r.lat)) && Number.isFinite(Number(r.lon))).map(r=>({
+      name:String(r.name||'飲食店'),
+      type:String(r.type||'restaurant'),
+      address:String(r.address||''),
+      openingHours:String(r.openingHours||r.opening_hours||''),
+      phone:String(r.phone||''),
+      website:String(r.website||r.url||''),
+      lat:Number(r.lat),
+      lon:Number(r.lon)
+    }));
+    restaurantMasterReady=true;
+  }catch(e){
+    restaurantMasterError='飲食店マスタが見つかりません';
+  }
+}
+function renderRestaurantsForViewport(){
   if(!restaurantVisible){restaurantLayer.clearLayers();return;}
-  const zoom=map.getZoom();
-  if(zoom<8){
+  if(!restaurantMasterReady){
     restaurantLayer.clearLayers();
-    setStatus('🍴 飲食店を見るには地図をもう少し拡大してください',2200);
+    setStatus(restaurantMasterError || '🍴 飲食店データを準備しています…',2200);
     return;
   }
-  try{
-    if(!restaurantMaster.length)setStatus('🍴 保存済み飲食店データを読み込んでいます…',0);
-    await loadRestaurantMaster();
-    const b=map.getBounds(),center=map.getCenter();
-    const rows=restaurantMaster.filter(r=>b.contains([r.lat,r.lon]));
-    rows.sort((a,c)=>(a.lat-center.lat)**2+(a.lon-center.lng)**2-((c.lat-center.lat)**2+(c.lon-center.lng)**2));
-    const limit=restaurantLimitForZoom(zoom);
-    const shown=rows.slice(0,limit);
-    const groups=clusterRestaurants(shown,zoom);
+  const zoom=map.getZoom();
+  if(zoom<10){
     restaurantLayer.clearLayers();
-    for(const g of groups){
-      const clustered=g.rows.length>1,r=g.rows[0];
-      const marker=L.circleMarker([g.lat,g.lon],{
-        renderer:window.__stationRenderer,
-        radius:clustered?Math.min(18,8+Math.log2(g.rows.length)*1.8):(zoom>=14?6:5),
-        weight:1.5,
-        color:'#ffffff',
-        fillColor:clustered?'#a94c27':'#d46a3a',
-        fillOpacity:.95
-      }).addTo(restaurantLayer);
-      if(clustered){
-        marker.bindTooltip(String(g.rows.length),{permanent:true,direction:'center',className:'restaurant-cluster-count'});
-        marker.bindPopup(`<div class="restaurant-popup"><div class="restaurant-popup-name">🍴 この周辺に${g.rows.length}件</div><div class="restaurant-popup-meta">地図を拡大すると各店舗を表示します。</div></div>`);
-      }else marker.bindPopup(restaurantPopup(r),{maxWidth:300});
-    }
-    setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件中 ${shown.length.toLocaleString('ja-JP')}件表示`,2000);
-  }catch(e){
-    restaurantLayer.clearLayers();
-    setStatus('restaurants-1.json と restaurants-2.json をGitHubにアップロードしてください',3500);
+    setStatus('🍴 飲食店を見るには地図をもう少し拡大してください',1800);
+    return;
   }
+  const b=map.getBounds();
+  const rows=RESTAURANT_MASTER.filter(r=>b.contains([r.lat,r.lon]));
+  const maxShown=zoom>=15?260:zoom>=13?180:100;
+  const shown=rows.slice(0,maxShown);
+  restaurantLayer.clearLayers();
+  for(const r of shown){
+    L.circleMarker([r.lat,r.lon],{
+      renderer:window.__stationRenderer,
+      radius:zoom>=14?6:5,
+      weight:1.5,
+      color:'#ffffff',
+      fillColor:'#d46a3a',
+      fillOpacity:.95
+    }).bindPopup(restaurantPopup(r),{maxWidth:300}).addTo(restaurantLayer);
+  }
+  setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件中 ${shown.length.toLocaleString('ja-JP')}件表示`,1500);
 }
 
 function getRakutenId(){ return localStorage.getItem('rakutenApplicationId') || ''; }
@@ -1283,7 +1334,7 @@ restaurantToggle?.addEventListener('change',()=>{
   }
 });
 
-loadRestaurantMaster().catch(()=>{});
+loadRestaurantMaster();
 
 map.on('moveend zoomend',()=>{
   scheduleStationRender();
