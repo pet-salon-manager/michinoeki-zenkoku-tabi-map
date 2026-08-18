@@ -956,20 +956,48 @@ function categoryPinSize(kind){
   if(kind==='hotel') return z>=14?[42,54]:z>=11?[37,48]:[32,42];
   return z>=14?[42,54]:z>=11?[37,48]:[32,42];
 }
+const CATEGORY_PIN_SRC_CACHE={};
+const CATEGORY_PIN_ICON_CACHE={};
+
+function categoryPinSrc(kind){
+  if(CATEGORY_PIN_SRC_CACHE[kind]) return CATEGORY_PIN_SRC_CACHE[kind];
+  const src=CATEGORY_PIN_IMAGE[kind]||'';
+  try{
+    if(src.startsWith('data:')){
+      const comma=src.indexOf(',');
+      const meta=src.slice(5,comma);
+      const mime=(meta.split(';')[0]||'image/png');
+      const bin=atob(src.slice(comma+1));
+      const bytes=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      CATEGORY_PIN_SRC_CACHE[kind]=URL.createObjectURL(new Blob([bytes],{type:mime}));
+      return CATEGORY_PIN_SRC_CACHE[kind];
+    }
+  }catch(e){}
+  CATEGORY_PIN_SRC_CACHE[kind]=src;
+  return src;
+}
+
 function categoryPinIcon(kind){
   const s=categoryPinSize(kind), w=s[0], h=s[1];
+  const key=`${kind}:${w}x${h}`;
+  if(CATEGORY_PIN_ICON_CACHE[key]) return CATEGORY_PIN_ICON_CACHE[key];
+  const src=categoryPinSrc(kind);
+
   if(kind==='rail'){
-    return L.divIcon({
+    CATEGORY_PIN_ICON_CACHE[key]=L.divIcon({
       className:'category-map-pin',
-      html:`<div class="rail-original-pin"><div class="rail-pin-body"><img class="rail-pin-image" src="${CATEGORY_PIN_IMAGE.rail}" alt=""></div><span class="rail-pin-tip"></span></div>`,
+      html:`<div class="rail-original-pin"><div class="rail-pin-body"><img class="rail-pin-image" src="${src}" alt=""></div><span class="rail-pin-tip"></span></div>`,
       iconSize:[w,h], iconAnchor:[Math.round(w/2),h-1], popupAnchor:[0,-h+7]
     });
+  }else{
+    CATEGORY_PIN_ICON_CACHE[key]=L.divIcon({
+      className:'category-map-pin',
+      html:`<img class="category-pin-img" src="${src}" alt="">`,
+      iconSize:[w,h], iconAnchor:[Math.round(w/2),h-2], popupAnchor:[0,-h+8]
+    });
   }
-  return L.divIcon({
-    className:'category-map-pin',
-    html:`<img class="category-pin-img" src="${CATEGORY_PIN_IMAGE[kind]}" alt="">`,
-    iconSize:[w,h], iconAnchor:[Math.round(w/2),h-2], popupAnchor:[0,-h+8]
-  });
+  return CATEGORY_PIN_ICON_CACHE[key];
 }
 
 
@@ -1269,6 +1297,7 @@ async function fetchHotelsForMap(){ return renderHotelsForViewport(); }
 const railLayer=L.layerGroup().addTo(map);
 window.__railLayer=railLayer;
 let railVisible=false;
+let railRenderTimer=null;
 function railPopup(r){
   const tq=encodeURIComponent(`${r.n} ${r.l||''} 時刻表`);
   const gq=encodeURIComponent(`${r.n}駅`);
@@ -1292,20 +1321,58 @@ function railPopup(r){
     ${routeHtml}
   </div>`;
 }
+function railLimitForZoom(z){
+  if(z<=5)return 55;
+  if(z===6)return 80;
+  if(z===7)return 120;
+  if(z===8)return 180;
+  if(z===9)return 260;
+  if(z===10)return 380;
+  if(z===11)return 520;
+  if(z===12)return 700;
+  return 900;
+}
+
+function pickRailsEvenly(rows,limit){
+  if(rows.length<=limit)return rows;
+  const out=[];
+  const step=rows.length/limit;
+  for(let i=0;i<limit;i++) out.push(rows[Math.floor(i*step)]);
+  return out;
+}
+
 function renderRails(){
   railLayer.clearLayers();
   if(!railVisible)return;
-  const renderer=window.__stationRenderer;
-  RAIL_STATIONS.forEach(r=>{
+
+  const b=map.getBounds().pad(0.08);
+  const inView=[];
+  for(const r of RAIL_STATIONS){
     const lat=Number(r.la),lon=Number(r.lo);
-    if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    if(b.contains([lat,lon]))inView.push(r);
+  }
+
+  const limit=railLimitForZoom(map.getZoom());
+  const shown=pickRailsEvenly(inView,limit);
+  const railIcon=categoryPinIcon('rail');
+
+  for(const r of shown){
+    const lat=Number(r.la),lon=Number(r.lo);
     L.marker([lat,lon],{
-      icon:categoryPinIcon('rail'),
+      icon:railIcon,
       title:(r.n||'')+'駅',
-      keyboard:true,
+      keyboard:false,
       riseOnHover:true
     }).bindPopup(railPopup(r),{maxWidth:280}).addTo(railLayer);
-  });
+  }
+
+  setStatus(`🚉 鉄道駅 ${inView.length.toLocaleString('ja-JP')}件中 ${shown.length.toLocaleString('ja-JP')}件表示`,1200);
+}
+
+function scheduleRailRender(){
+  clearTimeout(railRenderTimer);
+  railRenderTimer=setTimeout(()=>renderRails(),180);
 }
  const badge=document.getElementById('countBadge'),status=document.getElementById('status'),notice=document.getElementById('notice'),search=document.getElementById('searchInput');
 const geo=GEO;
@@ -1348,8 +1415,13 @@ const railToggleState=document.getElementById('railToggleState');
 railToggle.addEventListener('change',()=>{
   railVisible=railToggle.checked;
   railToggleState.textContent=railVisible?'ON':'OFF';
-  renderRails();
-  setStatus(railVisible?`全国の鉄道駅 ${RAIL_STATIONS.length.toLocaleString('ja-JP')}件を表示しました`:'鉄道駅を非表示にしました',1800);
+  if(railVisible){
+    renderRails();
+  }else{
+    clearTimeout(railRenderTimer);
+    railLayer.clearLayers();
+    setStatus('鉄道駅を非表示にしました',1400);
+  }
 });
 
 
@@ -1383,6 +1455,7 @@ loadRestaurantMaster();
 
 map.on('moveend zoomend',()=>{
   scheduleStationRender();
+  if(railVisible)scheduleRailRender();
   if(hotelVisible)scheduleHotelViewportRender();
   if(restaurantVisible)scheduleRestaurantRender();
 });
