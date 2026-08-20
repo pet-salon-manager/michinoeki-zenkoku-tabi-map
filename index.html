@@ -1030,15 +1030,10 @@ function tourismPopup(s){
   </div>`;
 }
 
-const TOURISM_OVERPASS_SERVERS=[
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.nchc.org.tw/api/interpreter'
-];
-let tourismRemoteSpots=[];
-let tourismRemoteKey='';
-let tourismFetchController=null;
-let tourismServerIndex=0;
+let TOURISM_MASTER=[];
+let tourismMasterReady=false;
+let tourismMasterLoading=false;
+let tourismMasterError='';
 
 function tourismTypeJa(tags){
   const t=tags||{};
@@ -1049,6 +1044,7 @@ function tourismTypeJa(tags){
   if(t.tourism==='theme_park')return 'テーマパーク';
   if(t.tourism==='viewpoint')return '展望・景勝地';
   if(t.tourism==='attraction')return '観光名所';
+  if(t.tourism==='information')return '観光案内';
   if(t.leisure==='garden')return '庭園';
   if(t.leisure==='park')return '公園';
   if(t.leisure==='water_park')return 'ウォーターパーク';
@@ -1056,111 +1052,60 @@ function tourismTypeJa(tags){
   if(t.historic==='ruins')return '遺跡・史跡';
   if(t.historic)return '史跡・歴史施設';
   if(t.amenity==='arts_centre')return '文化・芸術施設';
+  if(t.amenity==='theatre')return '劇場';
   return '観光地・観光施設';
 }
 
-function tourismKeyForBounds(b,z){
-  const sw=b.getSouthWest(), ne=b.getNorthEast();
-  const step=z>=13?0.01:z>=11?0.03:0.08;
-  const r=v=>Math.round(v/step)*step;
-  return [z<11?10:z<13?12:14,r(sw.lat),r(sw.lng),r(ne.lat),r(ne.lng)].join(':');
+function normalizeTourismRow(r){
+  const lat=Number(r.lat ?? r.latitude);
+  const lon=Number(r.lon ?? r.lng ?? r.longitude);
+  const name=String(r.name||'').trim();
+  if(!name||!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+  return {
+    id:r.id||'',
+    name,
+    pref:r.pref||'',
+    cat:r.cat||r.category||tourismTypeJa(r.tags||{}),
+    lat,lon,
+    website:r.website||r.url||'',
+    wikipedia:r.wikipedia||'',
+    openingHours:r.openingHours||r.opening_hours||''
+  };
 }
 
-function tourismRemoteCacheGet(key){
+async function loadTourismMaster(){
+  if(tourismMasterReady||tourismMasterLoading)return TOURISM_MASTER;
+  tourismMasterLoading=true;
+  tourismMasterError='';
   try{
-    const raw=localStorage.getItem('michinoekiTourismRemoteV2:'+key);
-    if(!raw)return null;
-    const obj=JSON.parse(raw);
-    if(!obj||!Array.isArray(obj.rows)||Date.now()-obj.time>1000*60*60*24*14)return null;
-    return obj.rows;
-  }catch(e){return null}
-}
-
-function tourismRemoteCacheSet(key,rows){
-  try{
-    localStorage.setItem('michinoekiTourismRemoteV2:'+key,JSON.stringify({time:Date.now(),rows:rows.slice(0,900)}));
-  }catch(e){}
-}
-
-async function fetchTourismForViewport(){
-  if(!tourismVisible)return;
-  const z=map.getZoom();
-  if(z<9){
-    tourismRemoteSpots=[];
-    tourismRemoteKey='';
-    return;
-  }
-  const b=map.getBounds().pad(0.05);
-  const key=tourismKeyForBounds(b,z);
-  if(key===tourismRemoteKey)return;
-  const cached=tourismRemoteCacheGet(key);
-  if(cached){
-    tourismRemoteKey=key;
-    tourismRemoteSpots=cached;
-    return;
-  }
-
-  if(tourismFetchController)tourismFetchController.abort();
-  tourismFetchController=new AbortController();
-
-  const sw=b.getSouthWest(), ne=b.getNorthEast();
-  const bbox=`${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
-  const q=`[out:json][timeout:22];
-(
- nwr["tourism"~"attraction|museum|gallery|zoo|aquarium|theme_park|viewpoint"]["name"](${bbox});
- nwr["historic"]["name"](${bbox});
- nwr["leisure"~"garden|park|water_park"]["name"](${bbox});
- nwr["amenity"="arts_centre"]["name"](${bbox});
-);
-out center tags 700;`;
-
-  let lastErr=null;
-  for(let attempt=0;attempt<2;attempt++){
-    const server=TOURISM_OVERPASS_SERVERS[(tourismServerIndex+attempt)%TOURISM_OVERPASS_SERVERS.length];
-    const timer=setTimeout(()=>{try{tourismFetchController.abort()}catch(e){}},24000);
-    try{
-      const res=await fetch(server,{
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
-        body:'data='+encodeURIComponent(q),
-        signal:tourismFetchController.signal
-      });
-      clearTimeout(timer);
-      if(!res.ok)throw new Error('HTTP '+res.status);
+    const urls=['./tourism-1.json','./tourism-2.json'];
+    const results=await Promise.all(urls.map(async u=>{
+      const res=await fetch(u+'?v=20260821',{cache:'no-store'});
+      if(!res.ok)throw new Error(u+' HTTP '+res.status);
       const data=await res.json();
-      const seen=new Set();
-      const rows=[];
-      for(const el of (data.elements||[])){
-        const tags=el.tags||{};
-        const name=(tags['name:ja']||tags.name||'').trim();
-        if(!name)continue;
-        const lat=Number(el.lat ?? el.center?.lat);
-        const lon=Number(el.lon ?? el.center?.lon);
-        if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-        const k=name+'|'+lat.toFixed(4)+'|'+lon.toFixed(4);
-        if(seen.has(k))continue;
-        seen.add(k);
-        rows.push({
-          pref:'',
-          name,
-          cat:tourismTypeJa(tags),
-          lat,lon,
-          remote:true
-        });
-        if(rows.length>=700)break;
-      }
-      tourismServerIndex=(tourismServerIndex+attempt+1)%TOURISM_OVERPASS_SERVERS.length;
-      tourismRemoteKey=key;
-      tourismRemoteSpots=rows;
-      tourismRemoteCacheSet(key,rows);
-      return;
-    }catch(e){
-      clearTimeout(timer);
-      lastErr=e;
-      if(e?.name==='AbortError')break;
+      return Array.isArray(data)?data:(Array.isArray(data.spots)?data.spots:[]);
+    }));
+    const seen=new Set();
+    const rows=[];
+    for(const raw of results.flat()){
+      const r=normalizeTourismRow(raw);
+      if(!r)continue;
+      const key=(r.id?String(r.id):'')+'|'+r.name.replace(/\s+/g,'').toLowerCase()+'|'+r.lat.toFixed(4)+'|'+r.lon.toFixed(4);
+      if(seen.has(key))continue;
+      seen.add(key);
+      rows.push(r);
     }
+    TOURISM_MASTER=rows;
+    tourismMasterReady=true;
+    setStatus(`📷 全国観光地マスタ ${rows.length.toLocaleString('ja-JP')}件を読み込みました`,1800);
+  }catch(e){
+    tourismMasterError='tourism-1.json / tourism-2.json が見つかりません';
+    TOURISM_MASTER=[];
+    tourismMasterReady=false;
+  }finally{
+    tourismMasterLoading=false;
   }
-  if(lastErr && tourismVisible)setStatus('📷 追加観光スポットの取得に失敗しました。内蔵観光地は表示中です',1800);
+  return TOURISM_MASTER;
 }
 
 function tourismDedupedRows(b){
@@ -1174,7 +1119,7 @@ function tourismDedupedRows(b){
     rows.push(s);
   };
   TOURISM_SPOTS.forEach(add);
-  tourismRemoteSpots.forEach(add);
+  TOURISM_MASTER.forEach(add);
   return rows;
 }
 
@@ -1182,13 +1127,13 @@ async function renderTourismForViewport(){
   tourismLayer.clearLayers();
   if(!tourismVisible)return;
 
-  await fetchTourismForViewport();
+  await loadTourismMaster();
   if(!tourismVisible)return;
 
   const b=map.getBounds().pad(0.08);
   const rows=tourismDedupedRows(b);
   const zoom=map.getZoom();
-  const maxShown=zoom<=5?110:zoom<=7?160:zoom===8?220:zoom===9?300:zoom===10?420:zoom===11?520:650;
+  const maxShown=zoom<=5?140:zoom<=7?220:zoom===8?320:zoom===9?450:zoom===10?600:zoom===11?800:1000;
   const shown=rows.slice(0,maxShown);
 
   for(const s of shown){
@@ -1197,14 +1142,15 @@ async function renderTourismForViewport(){
       .addTo(tourismLayer);
   }
 
-  const extra=tourismRemoteSpots.length;
-  const suffix=map.getZoom()>=9?`（追加取得 ${extra.toLocaleString('ja-JP')}件）`:'（拡大するとさらに増えます）';
+  const suffix=tourismMasterReady
+    ? `（全国マスタ ${TOURISM_MASTER.length.toLocaleString('ja-JP')}件）`
+    : `（内蔵観光地のみ・JSON未読み込み）`;
   setStatus(`📷 観光地・観光施設 ${shown.length.toLocaleString('ja-JP')}件表示 ${suffix}`,1600);
 }
 
 function scheduleTourismRender(){
   clearTimeout(tourismRenderTimer);
-  tourismRenderTimer=setTimeout(()=>renderTourismForViewport(),260);
+  tourismRenderTimer=setTimeout(()=>renderTourismForViewport(),220);
 }
 
 let restaurantMasterReady=false;
@@ -1725,13 +1671,13 @@ tourismToggle?.addEventListener('change',()=>{
     renderTourismForViewport();
   }else{
     clearTimeout(tourismRenderTimer);
-    try{ if(tourismFetchController)tourismFetchController.abort(); }catch(e){}
     tourismLayer.clearLayers();
     setStatus('観光地・観光施設を非表示にしました',1400);
   }
 });
 
 loadRestaurantMaster();
+loadTourismMaster();
 
 map.on('moveend zoomend',()=>{
   scheduleStationRender();
