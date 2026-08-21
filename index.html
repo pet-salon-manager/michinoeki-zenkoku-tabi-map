@@ -837,6 +837,7 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
       <input id="adminPasswordInput" class="admin-field" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top:7px">
       <button id="adminLoginBtn" class="admin-btn" type="button">Supabaseでログイン</button>
       <button id="adminResetRequestBtn" class="admin-btn secondary" type="button">パスワードを忘れた方・再設定メールを送る</button>
+      <button id="adminRecoveryManualBtn" class="admin-btn secondary" type="button">再設定メールのリンクから戻った方はこちら</button>
       <div id="adminLoginStatus" class="admin-login-status"></div>
       <button id="adminCloseLoginBtn" class="admin-btn secondary" type="button">閉じる</button>
     </div>
@@ -2277,6 +2278,8 @@ const recommendedLayer=L.layerGroup().addTo(map);
 
 function showPasswordRecoveryView(message=''){
   passwordRecoveryMode=true;
+  const loginStatus=document.getElementById('adminLoginStatus');
+  if(loginStatus)loginStatus.textContent='';
   adminModal?.classList.add('show');
   adminModal?.setAttribute('aria-hidden','false');
   if(adminLoginView)adminLoginView.style.display='none';
@@ -2618,25 +2621,73 @@ if(cloudDb){
     adminUnlocked=await isCurrentUserAdmin(currentAdminUser);
   });
 
-  // Safari/Yahooメール内ブラウザ等でイベントを取りこぼした場合の保険
-  (async()=>{
+  async function forceHandleRecoveryFromUrl(){
     try{
-      const hash=window.location.hash||'';
-      const query=window.location.search||'';
-      const looksRecovery =
-        hash.includes('type=recovery') ||
-        query.includes('type=recovery') ||
-        hash.includes('access_token=');
-      if(looksRecovery){
-        // detectSessionInUrl がセッションを取り込む時間を少し待つ
-        await new Promise(r=>setTimeout(r,500));
+      const url=new URL(window.location.href);
+      const code=url.searchParams.get('code');
+      const typeQ=url.searchParams.get('type');
+      const hashParams=new URLSearchParams((window.location.hash||'').replace(/^#/,''));
+      const accessToken=hashParams.get('access_token');
+      const refreshToken=hashParams.get('refresh_token');
+      const typeH=hashParams.get('type');
+
+      let session=null;
+
+      if(code){
+        try{
+          const {data,error}=await cloudDb.auth.exchangeCodeForSession(code);
+          if(!error)session=data?.session||null;
+        }catch(e){}
+      }
+
+      if(!session && accessToken && refreshToken){
+        try{
+          const {data,error}=await cloudDb.auth.setSession({
+            access_token:accessToken,
+            refresh_token:refreshToken
+          });
+          if(!error)session=data?.session||null;
+        }catch(e){}
+      }
+
+      if(!session){
         const {data}=await cloudDb.auth.getSession();
-        if(data?.session){
-          showPasswordRecoveryView('新しいパスワードを設定してください。');
-        }
+        session=data?.session||null;
+      }
+
+      const looksRecovery=
+        typeQ==='recovery' ||
+        typeH==='recovery' ||
+        !!code ||
+        !!accessToken;
+
+      if(looksRecovery && session){
+        showPasswordRecoveryView('新しいパスワードを設定してください。');
+        // URL内のトークン類を消して見た目を安全にする
+        try{history.replaceState({},document.title,window.location.pathname)}catch(e){}
+        return true;
       }
     }catch(e){}
+    return false;
+  }
+
+  (async()=>{
+    await new Promise(r=>setTimeout(r,300));
+    await forceHandleRecoveryFromUrl();
   })();
+
+  document.getElementById('adminRecoveryManualBtn')?.addEventListener('click',async()=>{
+    const s=document.getElementById('adminLoginStatus');
+    if(s)s.textContent='再設定セッションを確認しています…';
+    const ok=await forceHandleRecoveryFromUrl();
+    if(ok)return;
+    const {data}=await cloudDb.auth.getSession();
+    if(data?.session){
+      showPasswordRecoveryView('再設定セッションを確認できました。新しいパスワードを入力してください。');
+    }else if(s){
+      s.textContent='再設定セッションが見つかりません。アプリから再設定メールを送り直し、新しいメールのリンクを押してください。';
+    }
+  });
 }
 refreshAdminSession();
 loadCloudRecommendations(true);
