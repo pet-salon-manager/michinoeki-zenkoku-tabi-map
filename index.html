@@ -1628,6 +1628,17 @@ function fitSearchBounds(points){
   }
   map.fitBounds(valid,{padding:[34,34],maxZoom:11});
 }
+async function waitForGlobalSearchMasters(){
+  const started=Date.now();
+  while(Date.now()-started<6000){
+    const tourismDone=tourismMasterReady || !!tourismMasterError || !tourismMasterLoading;
+    const restaurantDone=restaurantMasterReady || !!restaurantMasterError;
+    const hotelDone=hotelMasterLoaded;
+    if(tourismDone && restaurantDone && hotelDone)return;
+    await new Promise(r=>setTimeout(r,120));
+  }
+}
+
 async function runGlobalMapSearch(raw){
   const myRun=++globalSearchRunId;
   const key=norm(raw);
@@ -1649,7 +1660,9 @@ async function runGlobalMapSearch(raw){
     return;
   }
 
-  // 検索中は下部ON/OFFに関係なく全カテゴリを横断検索
+  // 検索優先モード：
+  // 下部の鉄道駅・宿泊施設・飲食店・観光地スイッチがOFFでも無視し、
+  // 道の駅を含む全5カテゴリから一致する施設を必ずピン表示する。
   railLayer.clearLayers();
   hotelLayer.clearLayers();
   restaurantLayer.clearLayers();
@@ -1684,7 +1697,7 @@ async function runGlobalMapSearch(raw){
   }
   total+=railMatches.length; shownTotal+=shownRails.length;
 
-  setStatus(`🔎「${raw}」を全国の施設から検索しています…`,1200);
+  setStatus(`🔎 検索優先モード：「${raw}」を道の駅・鉄道駅・宿泊施設・飲食店・観光施設から検索中…`,1400);
 
   // JSON系データを読み込んでから検索
   await Promise.all([
@@ -1692,6 +1705,7 @@ async function runGlobalMapSearch(raw){
     loadRestaurantMaster(),
     loadTourismMaster()
   ]);
+  await waitForGlobalSearchMasters();
   if(myRun!==globalSearchRunId || !globalSearchActive)return;
 
   // 宿泊施設
@@ -1744,7 +1758,7 @@ async function runGlobalMapSearch(raw){
   if(total){
     fitSearchBounds(points);
     setStatus(
-      `🔎「${raw}」に関係する施設 ${total.toLocaleString('ja-JP')}件中 ${shownTotal.toLocaleString('ja-JP')}件を地図に表示`,
+      `🔎「${raw}」：全カテゴリ横断 ${total.toLocaleString('ja-JP')}件中 ${shownTotal.toLocaleString('ja-JP')}件をピン表示（下部ON/OFFは無視）`,
       2400
     );
   }else{
