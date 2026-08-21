@@ -768,6 +768,296 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 .admin-btn,
 .admin-field{display:none!important}
 
+
+/* =========================================================
+   自然・森林ナチュラル風
+   ※見た目だけ変更。HTML構造・機能・データ・JavaScriptは変更しない
+   ========================================================= */
+:root{
+  --nature-cream:#fbf7ea!important;
+  --nature-paper:#fffdf5!important;
+  --nature-mist:#f1f5e9!important;
+  --nature-leaf:#4f7b46!important;
+  --nature-leaf-dark:#315b3b!important;
+  --nature-leaf-soft:#92ad73!important;
+  --nature-moss:#6f8e59!important;
+  --nature-brown:#6b5034!important;
+  --nature-brown-soft:#8a755d!important;
+  --nature-line:#d9dfc6!important;
+  --nature-blue:#5b8fc2!important;
+  --nature-shadow:0 8px 24px rgba(55,79,45,.12)!important;
+}
+
+html,body{
+  background:
+    radial-gradient(circle at 8% 2%,rgba(143,174,116,.12),transparent 24%),
+    radial-gradient(circle at 96% 10%,rgba(179,197,145,.16),transparent 26%),
+    linear-gradient(180deg,#fcfaf1 0%,#f7f3e5 100%)!important;
+  color:var(--nature-brown)!important;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif!important;
+}
+.app{background:transparent!important}
+
+/* ヘッダー */
+header{
+  position:relative!important;
+  background:
+    linear-gradient(180deg,rgba(255,253,246,.98) 0%,rgba(249,246,232,.98) 100%)!important;
+  color:var(--nature-brown)!important;
+  border-bottom:1px solid var(--nature-line)!important;
+  box-shadow:0 5px 18px rgba(74,92,57,.08)!important;
+  overflow:hidden!important;
+}
+header:before{
+  content:"🌿"!important;
+  position:absolute!important;
+  left:-8px!important;
+  top:46px!important;
+  right:auto!important;
+  width:auto!important;height:auto!important;border-radius:0!important;
+  background:none!important;
+  font-size:42px!important;
+  opacity:.20!important;
+  transform:rotate(-18deg)!important;
+  pointer-events:none!important;
+}
+header:after{
+  content:"🍃"!important;
+  position:absolute!important;
+  right:10px!important;
+  top:10px!important;
+  bottom:auto!important;
+  font-size:44px!important;
+  opacity:.23!important;
+  transform:rotate(14deg)!important;
+  pointer-events:none!important;
+}
+.brandmark{
+  background:linear-gradient(145deg,#fffef8,#eef4e6)!important;
+  border:1px solid #d8e2c8!important;
+  box-shadow:0 5px 15px rgba(69,98,53,.13)!important;
+}
+.title-wrap h1{
+  color:var(--nature-brown)!important;
+  text-shadow:0 1px 0 rgba(255,255,255,.8)!important;
+  letter-spacing:.035em!important;
+}
+.title-wrap h1 .app-title-station{color:var(--nature-leaf-dark)!important}
+.sub{color:#7b725f!important}
+.badge{
+  background:rgba(255,253,246,.94)!important;
+  border:1px solid var(--nature-line)!important;
+  color:var(--nature-leaf-dark)!important;
+  box-shadow:0 3px 10px rgba(67,90,54,.07)!important;
+}
+
+/* 検索 */
+.search{
+  background:rgba(255,255,251,.96)!important;
+  border:1px solid #d7deca!important;
+  border-radius:18px!important;
+  box-shadow:0 5px 16px rgba(63,83,51,.10)!important;
+}
+.search:before{color:var(--nature-leaf-dark)!important}
+.search input{color:#584936!important}
+.search input::placeholder{color:#989283!important}
+.top-social-btn{box-shadow:0 3px 9px rgba(49,65,42,.12)!important}
+.jump-current-btn{
+  background:linear-gradient(135deg,#6f9e68,#477f54)!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.55)!important;
+  box-shadow:0 3px 10px rgba(53,91,55,.20)!important;
+}
+
+/* 地図フレーム */
+.mapwrap{
+  background:#edf3e5!important;
+  border:1px solid #cfd9bd!important;
+  border-radius:24px!important;
+  box-shadow:0 10px 28px rgba(58,79,48,.13)!important;
+}
+#map{background:#dfeadb!important}
+.leaflet-control-zoom{
+  border:0!important;
+  box-shadow:0 4px 13px rgba(55,75,45,.16)!important;
+}
+.leaflet-control-zoom a{
+  background:#fffdf6!important;
+  color:var(--nature-leaf-dark)!important;
+  border-color:#d9dfca!important;
+}
+.leaflet-control-attribution{
+  background:rgba(255,253,246,.86)!important;
+  color:#6d7467!important;
+}
+
+/* クラスタ */
+.normal-station-cluster{
+  background:linear-gradient(145deg,#6f975b,#456e43)!important;
+  color:#fff!important;
+  border:2px solid #fffdf6!important;
+  box-shadow:0 4px 12px rgba(44,69,42,.30)!important;
+}
+.search-cluster-bubble.station{
+  background:linear-gradient(145deg,#6f975b,#456e43)!important;
+}
+.station-pin{
+  background:linear-gradient(145deg,#71965f,#3e6948)!important;
+  border-color:#fffdf6!important;
+}
+
+/* ポップアップ */
+.leaflet-popup-content-wrapper{
+  background:linear-gradient(180deg,#fffdf7 0%,#fbf7eb 100%)!important;
+  border:1px solid #d9dfc9!important;
+  border-radius:20px!important;
+  box-shadow:0 12px 34px rgba(64,77,49,.18)!important;
+}
+.leaflet-popup-tip{background:#fbf7eb!important}
+.popup-eyebrow{color:#7a876f!important}
+.popup-name,.rail-station-name,.tourism-popup-name{
+  color:var(--nature-leaf-dark)!important;
+}
+.popup-meta,.rail-station-popup,.tourism-popup-meta{color:#6c675b!important}
+.popup-reg{color:#8a7358!important}
+.popup-link.map{
+  background:linear-gradient(135deg,#5f8d59,#3f704b)!important;
+  color:#fff!important;
+}
+.popup-link.web{
+  background:#efe8d8!important;
+  color:#64523d!important;
+}
+.popup-route-grid button{
+  background:linear-gradient(135deg,#5e8759,#3d6d49)!important;
+}
+.popup-google-route{
+  background:#fffdf7!important;
+  color:#4d604d!important;
+  border-color:#d9dfc9!important;
+}
+.station-weather-title,.popup-route-title{color:#475a45!important}
+.station-weather-box,.station-memo-box{border-top-color:#dfe2d2!important}
+.station-weather-retry{
+  background:#fffdf7!important;
+  color:var(--nature-leaf-dark)!important;
+  border-color:#d9dfc9!important;
+}
+.station-memo-open,.station-memo-save,.memo-page-save{
+  background:linear-gradient(135deg,#5f8e5a,#3e704b)!important;
+}
+.station-memo-preview{
+  background:#f2f2e6!important;
+  color:#625b50!important;
+}
+.memo-page-overlay{
+  background:
+    radial-gradient(circle at 95% 5%,rgba(142,172,117,.14),transparent 23%),
+    linear-gradient(180deg,#fffdf6 0%,#f7f3e5 100%)!important;
+}
+.memo-page-title,.memo-page-station{color:var(--nature-leaf-dark)!important}
+.memo-page-textarea{border-color:#d8ddc8!important;background:#fffef9!important}
+
+/* 各種案内カード */
+.rakuten-settings{
+  background:linear-gradient(135deg,#f0f5e8,#fffaf0)!important;
+  border:1px solid #d4dfc5!important;
+  box-shadow:0 5px 15px rgba(67,94,51,.08)!important;
+}
+.rakuten-settings-title{color:var(--nature-leaf-dark)!important}
+.hotel-book{
+  background:linear-gradient(135deg,#6b9661,#477c50)!important;
+  box-shadow:0 4px 12px rgba(58,92,52,.20)!important;
+}
+.hotel-route,.rail-timetable-btn{
+  background:#edf5e7!important;
+  color:#3f7048!important;
+}
+.rail-map-btn{background:#edf2ec!important;color:#506a58!important}
+.nearby-btn.hotel{background:#eef3e8!important;color:#4f6f51!important}
+.nearby-btn.onsen{background:#f8efe3!important;color:#875f40!important}
+.nearby-btn.food{background:#f7f2dc!important;color:#78633f!important}
+
+/* 下部2×2メニュー */
+.rail-fixed-bar{
+  background:
+    linear-gradient(180deg,rgba(255,253,245,.98),rgba(248,245,230,.98))!important;
+  border:1px solid #d7ddc7!important;
+  border-radius:24px 24px 0 0!important;
+  box-shadow:0 -8px 26px rgba(58,76,46,.13)!important;
+}
+.rail-fixed-bar::before{
+  background:
+    radial-gradient(circle at 12px 7px,#9eb887 0 3px,transparent 3.5px) repeat-x!important;
+  background-size:28px 7px!important;
+  opacity:.45!important;
+}
+.rail-fixed-title{color:#766a55!important}
+.rail-switch,.hotel-switch,.restaurant-switch,.tourism-switch{
+  background:rgba(255,255,250,.95)!important;
+  border:1px solid #d7ddc7!important;
+  border-radius:18px!important;
+  box-shadow:0 4px 12px rgba(67,82,53,.07)!important;
+  color:#52624e!important;
+}
+.rail-switch-label,.hotel-switch-label,.restaurant-switch-label,.tourism-switch-label{
+  color:#496b49!important;
+}
+.rail-switch-ui,.hotel-switch-ui,.restaurant-switch-ui,.tourism-switch-ui{
+  background:#c9cbbb!important;
+}
+.rail-switch input:checked + .rail-switch-ui,
+.hotel-switch input:checked + .hotel-switch-ui,
+.restaurant-switch input:checked + .restaurant-switch-ui,
+.tourism-switch input:checked + .tourism-switch-ui{
+  background:#67945d!important;
+}
+.rail-switch-state,.hotel-switch-state,.restaurant-switch-state,.tourism-switch-state{
+  background:#eeece1!important;
+  color:#7c7567!important;
+}
+.rail-switch input:checked ~ .rail-switch-state,
+.hotel-switch input:checked ~ .hotel-switch-state,
+.restaurant-switch input:checked ~ .restaurant-switch-state,
+.tourism-switch input:checked ~ .tourism-switch-state{
+  background:#e5f0df!important;
+  color:#4a784b!important;
+}
+.show-top-menu-btn{
+  background:linear-gradient(180deg,#f6faef,#eef5e5)!important;
+  border:1px solid #b8cba8!important;
+  color:#466d48!important;
+  box-shadow:0 3px 10px rgba(63,94,56,.11)!important;
+}
+
+/* フッター */
+.source-footer{
+  position:relative!important;
+  background:
+    linear-gradient(180deg,#fbf8ed 0%,#f3f1e2 100%)!important;
+  border-top:1px solid #d8dec9!important;
+  color:#72766a!important;
+  overflow:hidden!important;
+}
+.source-footer:before{
+  content:"🌲  🌿  🌲  🍃  🌲"!important;
+  display:block!important;
+  font-size:16px!important;
+  letter-spacing:8px!important;
+  opacity:.36!important;
+  margin-bottom:5px!important;
+}
+.source-footer strong{color:#50624e!important}
+
+/* 余白・質感 */
+.status{
+  background:rgba(58,76,57,.93)!important;
+  box-shadow:0 5px 18px rgba(45,62,46,.18)!important;
+}
+button:active{filter:brightness(.97)}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
