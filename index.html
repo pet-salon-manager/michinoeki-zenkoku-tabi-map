@@ -2303,7 +2303,7 @@ async function loadCloudRecommendations(silent=false){
   }
   try{
     const {data,error}=await cloudDb
-      .from('recommendations')
+      .from('michinoeki_recommendations')
       .select('facility_key,kind,name,meta,lat,lon,reason,updated_at');
     if(error)throw error;
     cloudRecommendations={};
@@ -2343,7 +2343,7 @@ recommendedOnlyBtn?.addEventListener('click',async()=>{
 async function isCurrentUserAdmin(user){
   if(!cloudDb||!user)return false;
   const {data,error}=await cloudDb
-    .from('admin_users')
+    .from('michinoeki_admin_users')
     .select('user_id')
     .eq('user_id',user.id)
     .maybeSingle();
@@ -2473,7 +2473,7 @@ function renderAdminSearch(forceRecommended=false){
       btn.disabled=true;
       try{
         if(cloudRecommendations[key]){
-          const {error}=await cloudDb.from('recommendations').delete().eq('facility_key',key);
+          const {error}=await cloudDb.from('michinoeki_recommendations').delete().eq('facility_key',key);
           if(error)throw error;
         }else{
           const payload={
@@ -2481,7 +2481,7 @@ function renderAdminSearch(forceRecommended=false){
             reason:'',
             updated_by:currentAdminUser?.id||null
           };
-          const {error}=await cloudDb.from('recommendations').upsert(payload,{onConflict:'facility_key'});
+          const {error}=await cloudDb.from('michinoeki_recommendations').upsert(payload,{onConflict:'facility_key'});
           if(error)throw error;
         }
         await loadCloudRecommendations(true);

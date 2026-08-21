@@ -1,0 +1,5 @@
+GitHub Pages の michinoeki-zenkoku-tabi-map リポジトリ直下へ、
+index.html と supabase-config.js を同じ場所にアップロードしてください。
+
+※ supabase-config.js の URL は /rest/v1/ を付けない Project URL を使用しています。
+※ Publishable key を使用しています。Secret key / service_role key は使用していません。
