@@ -761,7 +761,6 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 
 <script src="./supabase-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 </head>
 <body>
 <div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
@@ -2214,7 +2213,7 @@ const supabaseConfigured=!!(
   !String(SUPABASE_CFG.url).includes('YOUR_') &&
   !String(SUPABASE_CFG.anonKey).includes('YOUR_')
 );
-const cloudDb=supabaseConfigured && window.supabase
+const cloudDb=(supabaseConfigured && window.supabase)
   ? window.supabase.createClient(SUPABASE_CFG.url,SUPABASE_CFG.anonKey,{
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     })
@@ -2258,8 +2257,7 @@ function serializeFacility(kind,item){
     kind,
     name:facilityLabel(kind,item),
     meta:facilityMeta(kind,item),
-    lat:ll[0],
-    lon:ll[1]
+    lat:ll[0],lon:ll[1]
   };
 }
 function allAdminFacilities(){
@@ -2272,48 +2270,34 @@ function allAdminFacilities(){
   return out;
 }
 function recMarkerIcon(){
-  return L.divIcon({
-    className:'rec-star-icon',
-    html:'<div class="rec-star-marker">⭐</div>',
-    iconSize:[34,34],iconAnchor:[17,17]
-  });
+  return L.divIcon({className:'rec-star-icon',html:'<div class="rec-star-marker">⭐</div>',iconSize:[34,34],iconAnchor:[17,17]});
 }
 function renderRecommendedLayer(){
   recommendedLayer.clearLayers();
   for(const rec of Object.values(cloudRecommendations)){
     if(!Number.isFinite(Number(rec.lat))||!Number.isFinite(Number(rec.lon)))continue;
     const reason=rec.reason?`<div class="rec-popup-reason">${esc(rec.reason)}</div>`:'';
-    L.marker([Number(rec.lat),Number(rec.lon)],{
-      icon:recMarkerIcon(),title:rec.name||'おすすめ',keyboard:false,riseOnHover:true
-    }).bindPopup(
-      `<div><div class="rec-badge">⭐ 管理者おすすめ</div>`+
-      `<div class="rec-popup-title">${esc(rec.name||'おすすめ施設')}</div>`+
-      `<div style="font-size:11px;color:#666;margin-top:3px">${esc(rec.meta||'')}</div>`+
-      `${reason}<button type="button" onclick="map.setView([${Number(rec.lat)},${Number(rec.lon)}],15)" `+
-      `style="width:100%;margin-top:8px;padding:9px;border:0;border-radius:9px;background:#315d3c;color:#fff;font-weight:900">この場所を拡大</button></div>`
-    ).addTo(recommendedLayer);
+    L.marker([Number(rec.lat),Number(rec.lon)],{icon:recMarkerIcon(),title:rec.name||'おすすめ',keyboard:false,riseOnHover:true})
+      .bindPopup(`<div><div class="rec-badge">⭐ 管理者おすすめ</div><div class="rec-popup-title">${esc(rec.name||'おすすめ施設')}</div><div style="font-size:11px;color:#666;margin-top:3px">${esc(rec.meta||'')}</div>${reason}<button type="button" onclick="window.__stationMap.setView([${Number(rec.lat)},${Number(rec.lon)}],15)" style="width:100%;margin-top:8px;padding:9px;border:0;border-radius:9px;background:#315d3c;color:#fff;font-weight:900">この場所を拡大</button></div>`)
+      .addTo(recommendedLayer);
   }
 }
 async function loadCloudRecommendations(silent=false){
   if(!cloudDb){
     cloudRecommendations={};
     renderRecommendedLayer();
-    if(!silent)setStatus('Supabaseが未設定です。supabase-config.jsを設定してください。',2600);
+    if(!silent)setStatus('Supabase接続設定を確認してください',2200);
     return;
   }
   try{
-    const {data,error}=await cloudDb
-      .from('michinoeki_recommendations')
+    const {data,error}=await cloudDb.from('michinoeki_recommendations')
       .select('facility_key,kind,name,meta,lat,lon,reason,updated_at');
     if(error)throw error;
     cloudRecommendations={};
     for(const row of (data||[]))cloudRecommendations[row.facility_key]=row;
     renderRecommendedLayer();
-    if(recommendedOnlyMode){
-      setStatus(`⭐ クラウドおすすめ ${Object.keys(cloudRecommendations).length}件を表示`,1400);
-    }
   }catch(e){
-    if(!silent)setStatus(`おすすめのクラウド読み込みに失敗: ${e.message||e}`,2800);
+    if(!silent)setStatus(`おすすめ読み込み失敗: ${e.message||e}`,2600);
   }
 }
 function setRecommendedOnlyMode(on){
@@ -2324,7 +2308,7 @@ function setRecommendedOnlyMode(on){
     window.__stationLayer.clearLayers();
     railLayer.clearLayers();hotelLayer.clearLayers();restaurantLayer.clearLayers();tourismLayer.clearLayers();
     renderRecommendedLayer();
-    setStatus(`⭐ 管理者おすすめ ${Object.keys(cloudRecommendations).length}件を表示しています`,1600);
+    setStatus(`⭐ 管理者おすすめ ${Object.keys(cloudRecommendations).length}件を表示しています`,1500);
   }else{
     recommendedLayer.clearLayers();
     render('');
@@ -2332,39 +2316,34 @@ function setRecommendedOnlyMode(on){
     if(hotelVisible)renderHotelsForViewport();
     if(restaurantVisible)renderRestaurantsForViewport();
     if(tourismVisible)renderTourismForViewport();
-    setStatus('通常表示に戻しました',1200);
+    setStatus('通常表示に戻しました',1100);
   }
 }
 recommendedOnlyBtn?.addEventListener('click',async()=>{
-  if(!Object.keys(cloudRecommendations).length)await loadCloudRecommendations(false);
+  await loadCloudRecommendations(true);
   setRecommendedOnlyMode(!recommendedOnlyMode);
 });
 
 async function isCurrentUserAdmin(user){
   if(!cloudDb||!user)return false;
-  const {data,error}=await cloudDb
-    .from('michinoeki_admin_users')
-    .select('user_id')
-    .eq('user_id',user.id)
-    .maybeSingle();
-  if(error)return false;
-  return !!data;
+  const {data,error}=await cloudDb.from('michinoeki_admin_users')
+    .select('user_id').eq('user_id',user.id).maybeSingle();
+  return !error && !!data;
 }
 async function refreshAdminSession(){
   if(!cloudDb)return;
   const {data}=await cloudDb.auth.getSession();
-  const user=data?.session?.user||null;
-  currentAdminUser=user;
-  adminUnlocked=await isCurrentUserAdmin(user);
+  currentAdminUser=data?.session?.user||null;
+  adminUnlocked=await isCurrentUserAdmin(currentAdminUser);
 }
 function openAdminModal(){
   adminModal?.classList.add('show');
   adminModal?.setAttribute('aria-hidden','false');
-  if(!supabaseConfigured){
+  if(!cloudDb){
     adminLoginView.style.display='block';
     adminPanelView.style.display='none';
     const s=document.getElementById('adminLoginStatus');
-    if(s)s.textContent='Supabase未設定です。supabase-config.js に Project URL と anon/publishable key を設定してください。';
+    if(s)s.textContent='Supabase接続設定を確認してください。';
     return;
   }
   adminLoginView.style.display=adminUnlocked?'none':'block';
@@ -2384,52 +2363,34 @@ document.getElementById('adminLoginBtn')?.addEventListener('click',async()=>{
   const email=(document.getElementById('adminEmailInput')?.value||'').trim();
   const password=document.getElementById('adminPasswordInput')?.value||'';
   const status=document.getElementById('adminLoginStatus');
-  if(!cloudDb){
-    status.textContent='Supabaseが未設定です。';
-    return;
-  }
-  if(!email||!password){
-    status.textContent='メールアドレスとパスワードを入力してください。';
-    return;
-  }
+  if(!cloudDb){status.textContent='Supabase接続設定を確認してください。';return}
+  if(!email||!password){status.textContent='メールアドレスとパスワードを入力してください。';return}
   status.textContent='ログインしています…';
   const {data,error}=await cloudDb.auth.signInWithPassword({email,password});
-  if(error){
-    status.textContent='ログインできませんでした: '+error.message;
-    return;
-  }
+  if(error){status.textContent='ログインできませんでした: '+error.message;return}
   const user=data?.user||data?.session?.user;
-  const ok=await isCurrentUserAdmin(user);
-  if(!ok){
+  if(!(await isCurrentUserAdmin(user))){
     await cloudDb.auth.signOut();
     adminUnlocked=false;currentAdminUser=null;
-    status.textContent='このアカウントは管理者として登録されていません。';
+    status.textContent='このアカウントは道の駅管理者に登録されていません。';
     return;
   }
-  adminUnlocked=true;currentAdminUser=user;
-  status.textContent='';
+  adminUnlocked=true;currentAdminUser=user;status.textContent='';
   document.getElementById('adminPasswordInput').value='';
-  adminLoginView.style.display='none';
-  adminPanelView.style.display='block';
+  adminLoginView.style.display='none';adminPanelView.style.display='block';
   await prepareAdminPanel();
-  setStatus('🔐 管理者としてログインしました',1400);
+  setStatus('🔐 管理者としてログインしました',1300);
 });
-
 document.getElementById('adminLogoutBtn')?.addEventListener('click',async()=>{
   if(cloudDb)await cloudDb.auth.signOut();
   adminUnlocked=false;currentAdminUser=null;
   adminPanelView.style.display='none';adminLoginView.style.display='block';
-  setStatus('管理者ログアウトしました',1200);
+  setStatus('管理者ログアウトしました',1100);
 });
 
 async function prepareAdminPanel(){
-  adminSearchResults.innerHTML='<div class="admin-note">施設データとクラウドおすすめを読み込んでいます…</div>';
-  await Promise.all([
-    loadNationwideHotelMaster(),
-    loadRestaurantMaster(),
-    loadTourismMaster(),
-    loadCloudRecommendations(true)
-  ]);
+  adminSearchResults.innerHTML='<div class="admin-note">施設データを読み込んでいます…</div>';
+  await Promise.all([loadNationwideHotelMaster(),loadRestaurantMaster(),loadTourismMaster(),loadCloudRecommendations(true)]);
   renderAdminSearch();
 }
 function renderAdminSearch(forceRecommended=false){
@@ -2444,171 +2405,77 @@ function renderAdminSearch(forceRecommended=false){
     rows=rows.slice(0,80);
   }
   rows=rows.slice(0,180);
-  if(!rows.length){
-    adminSearchResults.innerHTML='<div class="admin-note">該当する施設がありません。</div>';
-    return;
-  }
+  if(!rows.length){adminSearchResults.innerHTML='<div class="admin-note">該当する施設がありません。</div>';return}
   adminSearchResults.innerHTML=rows.map(x=>{
-    const key=facilityKey(x.kind,x.item);
-    const rec=cloudRecommendations[key];
-    return `<div class="admin-result" data-kind="${x.kind}" data-key="${esc(key)}">
-      <div>
-        <div class="admin-result-name">${rec?'⭐ ':''}${esc(facilityLabel(x.kind,x.item))}</div>
-        <div class="admin-result-meta">${esc(facilityMeta(x.kind,x.item))}</div>
-      </div>
+    const key=facilityKey(x.kind,x.item),rec=cloudRecommendations[key];
+    return `<div class="admin-result">
+      <div><div class="admin-result-name">${rec?'⭐ ':''}${esc(facilityLabel(x.kind,x.item))}</div>
+      <div class="admin-result-meta">${esc(facilityMeta(x.kind,x.item))}</div></div>
       <button type="button" class="admin-recommend-toggle ${rec?'on':''}" data-rec-key="${esc(key)}">${rec?'おすすめON':'おすすめOFF'}</button>
-      <div class="admin-rec-editor ${rec?'show':''}" data-editor-key="${esc(key)}">
+      <div class="admin-rec-editor ${rec?'show':''}">
         <textarea class="admin-field" data-reason-key="${esc(key)}" placeholder="おすすめ理由・紹介文">${esc(rec?.reason||'')}</textarea>
         <button type="button" class="admin-btn" data-save-reason="${esc(key)}">紹介文をクラウド保存</button>
-      </div>
-    </div>`;
+      </div></div>`;
   }).join('');
 
   adminSearchResults.querySelectorAll('[data-rec-key]').forEach(btn=>{
     btn.addEventListener('click',async()=>{
-      if(!adminUnlocked||!cloudDb)return;
       const key=btn.dataset.recKey;
       const entry=rows.find(x=>facilityKey(x.kind,x.item)===key);
-      if(!entry)return;
+      if(!entry||!cloudDb)return;
       btn.disabled=true;
       try{
         if(cloudRecommendations[key]){
           const {error}=await cloudDb.from('michinoeki_recommendations').delete().eq('facility_key',key);
           if(error)throw error;
         }else{
-          const payload={
-            ...serializeFacility(entry.kind,entry.item),
-            reason:'',
-            updated_by:currentAdminUser?.id||null
-          };
+          const payload={...serializeFacility(entry.kind,entry.item),reason:'',updated_by:currentAdminUser?.id||null};
           const {error}=await cloudDb.from('michinoeki_recommendations').upsert(payload,{onConflict:'facility_key'});
           if(error)throw error;
         }
         await loadCloudRecommendations(true);
-    const n=Object.keys(getRecommendations()).length;
-    setStatus(`⭐ 管理者おすすめ ${n}件を表示しています`,1600);
-  }else{
-    recommendedLayer.clearLayers();
-    render('');
-    if(railVisible)renderRails();
-    if(hotelVisible)renderHotelsForViewport();
-    if(restaurantVisible)renderRestaurantsForViewport();
-    if(tourismVisible)renderTourismForViewport();
-    setStatus('通常表示に戻しました',1200);
-  }
-}
-recommendedOnlyBtn?.addEventListener('click',()=>setRecommendedOnlyMode(!recommendedOnlyMode));
-
-function openAdminModal(){
-  adminModal?.classList.add('show');
-  adminModal?.setAttribute('aria-hidden','false');
-  adminLoginView.style.display=adminUnlocked?'none':'block';
-  adminPanelView.style.display=adminUnlocked?'block':'none';
-  if(adminUnlocked)prepareAdminPanel();
-}
-function closeAdminModal(){
-  adminModal?.classList.remove('show');
-  adminModal?.setAttribute('aria-hidden','true');
-}
-document.getElementById('adminOpenBtn')?.addEventListener('click',openAdminModal);
-document.getElementById('adminCloseLoginBtn')?.addEventListener('click',closeAdminModal);
-document.getElementById('adminClosePanelBtn')?.addEventListener('click',closeAdminModal);
-adminModal?.addEventListener('click',e=>{if(e.target===adminModal)closeAdminModal()});
-
-document.getElementById('adminLoginBtn')?.addEventListener('click',async()=>{
-  const input=document.getElementById('adminPasswordInput');
-  const status=document.getElementById('adminLoginStatus');
-  const pw=input?.value||'';
-  if(pw.length<4){status.textContent='4文字以上のパスワードを入力してください。';return}
-  const h=await sha256Text(pw);
-  const saved=localStorage.getItem(ADMIN_HASH_KEY);
-  if(!saved){
-    localStorage.setItem(ADMIN_HASH_KEY,h);
-    adminUnlocked=true;
-    status.textContent='';
-    input.value='';
-    adminLoginView.style.display='none';adminPanelView.style.display='block';
-    await prepareAdminPanel();
-    setStatus('🔐 管理者パスワードを設定しました',1500);
-    return;
-  }
-  if(saved!==h){status.textContent='パスワードが違います。';return}
-  adminUnlocked=true;status.textContent='';input.value='';
-  adminLoginView.style.display='none';adminPanelView.style.display='block';
-  await prepareAdminPanel();
-});
-document.getElementById('adminLogoutBtn')?.addEventListener('click',()=>{
-  adminUnlocked=false;
-  adminPanelView.style.display='none';adminLoginView.style.display='block';
-});
-async function prepareAdminPanel(){
-  adminSearchResults.innerHTML='<div class="admin-note">施設データを読み込んでいます…</div>';
-  await Promise.all([loadNationwideHotelMaster(),loadRestaurantMaster(),loadTourismMaster()]);
-  renderAdminSearch();
-}
-function renderAdminSearch(forceRecommended=false){
-  if(!adminUnlocked)return;
-  const recs=getRecommendations();
-  const q=norm(adminFacilitySearch?.value||'');
-  let rows=allAdminFacilities();
-  if(forceRecommended){
-    rows=rows.filter(x=>!!recs[facilityKey(x.kind,x.item)]);
-  }else if(q){
-    rows=rows.filter(x=>searchTextMatch(`${facilityLabel(x.kind,x.item)} ${facilityMeta(x.kind,x.item)}`,q));
-  }else{
-    rows=rows.slice(0,80);
-  }
-  rows=rows.slice(0,180);
-  if(!rows.length){
-    adminSearchResults.innerHTML='<div class="admin-note">該当する施設がありません。</div>';return;
-  }
-  adminSearchResults.innerHTML=rows.map((x,idx)=>{
-    const key=facilityKey(x.kind,x.item);
-    const rec=recs[key];
-    const encoded=encodeURIComponent(key);
-    return `<div class="admin-result" data-kind="${x.kind}" data-key="${esc(key)}">
-      <div>
-        <div class="admin-result-name">${rec?'⭐ ':''}${esc(facilityLabel(x.kind,x.item))}</div>
-        <div class="admin-result-meta">${esc(facilityMeta(x.kind,x.item))}</div>
-      </div>
-      <button type="button" class="admin-recommend-toggle ${rec?'on':''}" data-rec-key="${esc(key)}">${rec?'おすすめON':'おすすめOFF'}</button>
-      <div class="admin-rec-editor ${rec?'show':''}" data-editor-key="${esc(key)}">
-        <textarea class="admin-field" data-reason-key="${esc(key)}" placeholder="おすすめ理由・紹介文">${esc(rec?.reason||'')}</textarea>
-        <button type="button" class="admin-btn" data-save-reason="${esc(key)}">紹介文を保存</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  adminSearchResults.querySelectorAll('[data-rec-key]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const key=btn.dataset.recKey;
-      const entry=rows.find(x=>facilityKey(x.kind,x.item)===key);
-      if(!entry)return;
-      const all=getRecommendations();
-      if(all[key])delete all[key];
-      else all[key]={...serializeFacility(entry.kind,entry.item),reason:''};
-      saveRecommendations(all);renderRecommendedLayer();renderAdminSearch(forceRecommended);
+        renderAdminSearch(forceRecommended);
+        setStatus('⭐ おすすめ設定をクラウド保存しました',1200);
+      }catch(e){
+        setStatus(`保存できませんでした: ${e.message||e}`,2500);
+        btn.disabled=false;
+      }
     });
   });
+
   adminSearchResults.querySelectorAll('[data-save-reason]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
+    btn.addEventListener('click',async()=>{
       const key=btn.dataset.saveReason;
       const ta=adminSearchResults.querySelector(`[data-reason-key="${CSS.escape(key)}"]`);
-      const all=getRecommendations();
-      if(all[key]){
-        all[key].reason=(ta?.value||'').trim();saveRecommendations(all);renderRecommendedLayer();
-        setStatus('⭐ おすすめ紹介文を保存しました',1200);
-      }
+      if(!cloudDb||!cloudRecommendations[key])return;
+      btn.disabled=true;
+      const {error}=await cloudDb.from('michinoeki_recommendations')
+        .update({reason:(ta?.value||'').trim(),updated_by:currentAdminUser?.id||null,updated_at:new Date().toISOString()})
+        .eq('facility_key',key);
+      btn.disabled=false;
+      if(error){setStatus(`紹介文を保存できませんでした: ${error.message}`,2500);return}
+      await loadCloudRecommendations(true);
+      setStatus('⭐ おすすめ紹介文をクラウド保存しました',1200);
     });
   });
 }
 let adminSearchTimer=null;
 adminFacilitySearch?.addEventListener('input',()=>{
-  clearTimeout(adminSearchTimer);adminSearchTimer=setTimeout(()=>renderAdminSearch(false),240);
+  clearTimeout(adminSearchTimer);
+  adminSearchTimer=setTimeout(()=>renderAdminSearch(false),240);
 });
 document.getElementById('adminShowRecommendedBtn')?.addEventListener('click',()=>renderAdminSearch(true));
 
-renderRecommendedLayer();
+if(cloudDb){
+  cloudDb.auth.onAuthStateChange(async(_event,session)=>{
+    currentAdminUser=session?.user||null;
+    adminUnlocked=await isCurrentUserAdmin(currentAdminUser);
+  });
+}
+refreshAdminSession();
+loadCloudRecommendations(true);
+
+
 
 
 map.on('moveend zoomend',()=>{
@@ -2739,7 +2606,7 @@ function showTopMenu(){
     <div id="adminLoginView">
       <h2>🔐 管理者ログイン</h2>
       <div class="admin-note">
-        Supabase Authで管理者認証します。おすすめ設定はクラウドに保存され、別端末や一般ユーザーにも同じ内容が反映されます。
+        Supabase Authで管理者認証します。おすすめ設定はクラウドへ保存されます。
       </div>
       <input id="adminEmailInput" class="admin-field" type="email" placeholder="管理者メールアドレス" autocomplete="username">
       <input id="adminPasswordInput" class="admin-field" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top:7px">
