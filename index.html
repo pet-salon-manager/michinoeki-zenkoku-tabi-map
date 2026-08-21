@@ -617,6 +617,23 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
   .tourism-switch-label,.restaurant-switch-label{font-size:9px!important}
 }
 
+
+/* ===== 検索結果：カテゴリ別クラスタ ===== */
+.search-cluster-icon{background:transparent!important;border:0!important}
+.search-cluster-bubble{
+  min-width:38px;height:38px;padding:0 8px;border-radius:999px;
+  display:flex;align-items:center;justify-content:center;gap:3px;
+  color:#fff;font-weight:900;font-size:12px;line-height:1;
+  border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.34);
+  white-space:nowrap
+}
+.search-cluster-bubble.station{background:#3f7e48}
+.search-cluster-bubble.rail{background:#d98223}
+.search-cluster-bubble.hotel{background:#3f6fa5}
+.search-cluster-bubble.restaurant{background:#d25e35}
+.search-cluster-bubble.tourism{background:#8e35ad}
+.search-cluster-bubble span{font-size:13px}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1606,37 +1623,6 @@ function searchSampleEvenly(rows,limit){
   for(let i=0;i<limit;i++)out.push(rows[Math.floor(i*step)]);
   return out;
 }
-function searchCategoryCap(total){
-  // iPhone向け：検索結果は全件を数えるが、描画ピン数は制限
-  if(total<=30)return total;
-  if(total<=100)return 60;
-  if(total<=500)return 90;
-  return 120;
-}
-function searchViewportPreferred(rows,latKey='lat',lonKey='lon',limit=120){
-  if(!rows.length)return rows;
-  const b=map.getBounds().pad(0.35);
-  const inView=[], outView=[];
-  for(const r of rows){
-    const lat=Number(typeof latKey==='function'?latKey(r):r[latKey]);
-    const lon=Number(typeof lonKey==='function'?lonKey(r):r[lonKey]);
-    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-    (b.contains([lat,lon])?inView:outView).push(r);
-  }
-  const picked=[];
-  const first=searchSampleEvenly(inView,Math.min(limit,inView.length));
-  picked.push(...first);
-  const left=limit-picked.length;
-  if(left>0)picked.push(...searchSampleEvenly(outView,left));
-  return picked;
-}
-function searchRenderStatus(raw,total,shownTotal){
-  const hidden=Math.max(0,total-shownTotal);
-  return hidden
-    ? `🔎「${raw}」：${total.toLocaleString('ja-JP')}件ヒット、軽量表示で${shownTotal.toLocaleString('ja-JP')}件をピン表示`
-    : `🔎「${raw}」：${total.toLocaleString('ja-JP')}件をピン表示`;
-}
-
 function collectTourismAll(){
   const rows=[],seen=new Set();
   const add=s=>{
@@ -1670,17 +1656,182 @@ async function waitForGlobalSearchMasters(){
   }
 }
 
+
+const GLOBAL_SEARCH_RESULTS={
+  station:[],rail:[],hotel:[],restaurant:[],tourism:[]
+};
+let globalSearchClusterTimer=null;
+
+const SEARCH_CAT_META={
+  station:{emoji:'●',cls:'station'},
+  rail:{emoji:'🚉',cls:'rail'},
+  hotel:{emoji:'🏨',cls:'hotel'},
+  restaurant:{emoji:'🍴',cls:'restaurant'},
+  tourism:{emoji:'📷',cls:'tourism'}
+};
+
+function searchItemLatLon(kind,item){
+  if(kind==='station')return [Number(item.lat),Number(item.lon)];
+  if(kind==='rail')return [Number(item.la),Number(item.lo)];
+  if(kind==='hotel')return [Number(item._lat),Number(item._lon)];
+  return [Number(item.lat),Number(item.lon)];
+}
+
+function searchSingleMarker(kind,item){
+  const ll=searchItemLatLon(kind,item);
+  if(!Number.isFinite(ll[0])||!Number.isFinite(ll[1]))return null;
+
+  if(kind==='station'){
+    const st=item;
+    const icon=L.divIcon({
+      className:'michi-station-icon',
+      html:`<div class="michi-pin ${st.approx?'approx':''}"><span></span></div>`,
+      iconSize:[30,38],iconAnchor:[15,36],popupAnchor:[0,-34]
+    });
+    const m=L.marker(ll,{icon,title:st.name,keyboard:false,riseOnHover:true});
+    m.on('click',()=>{
+      L.popup({maxWidth:300,autoPan:true,closeButton:true,offset:[0,-22]})
+       .setLatLng(ll).setContent(popup(st,ll[0],ll[1])).openOn(map);
+    });
+    return m;
+  }
+  if(kind==='rail'){
+    return L.marker(ll,{icon:categoryPinIcon('rail'),title:(item.n||'')+'駅',keyboard:false,riseOnHover:true})
+      .bindPopup(railPopup(item),{maxWidth:280});
+  }
+  if(kind==='hotel'){
+    return L.marker(ll,{icon:categoryPinIcon('hotel'),title:item.name||'宿泊施設',keyboard:false,riseOnHover:true})
+      .bindPopup(hotelPopup(item),{maxWidth:310});
+  }
+  if(kind==='restaurant'){
+    return L.marker(ll,{icon:categoryPinIcon('restaurant'),title:item.name||'飲食店',keyboard:false,riseOnHover:true})
+      .bindPopup(restaurantPopup(item),{maxWidth:300});
+  }
+  if(kind==='tourism'){
+    return L.marker(ll,{icon:tourismIcon,title:item.name||'観光地',keyboard:false,riseOnHover:true})
+      .bindPopup(tourismPopup(item),{maxWidth:300});
+  }
+  return null;
+}
+
+function clusterCellSizeForZoom(z){
+  if(z<=5)return 92;
+  if(z<=7)return 82;
+  if(z<=9)return 72;
+  if(z<=11)return 62;
+  if(z<=13)return 52;
+  return 42;
+}
+
+function makeSearchClusterIcon(kind,count){
+  const meta=SEARCH_CAT_META[kind];
+  const html=`<div class="search-cluster-bubble ${meta.cls}"><span>${meta.emoji}</span>${count}</div>`;
+  const w=Math.max(38,26+String(count).length*8);
+  return L.divIcon({
+    className:'search-cluster-icon',
+    html,
+    iconSize:[w,38],
+    iconAnchor:[Math.round(w/2),19]
+  });
+}
+
+function buildSearchClusters(kind,items){
+  const z=map.getZoom();
+  const cell=clusterCellSizeForZoom(z);
+  const bounds=map.getBounds().pad(0.18);
+  const cells=new Map();
+
+  for(const item of items){
+    const ll=searchItemLatLon(kind,item);
+    if(!Number.isFinite(ll[0])||!Number.isFinite(ll[1]))continue;
+    if(!bounds.contains(ll))continue;
+    const pt=map.project(ll,z);
+    const k=Math.floor(pt.x/cell)+'|'+Math.floor(pt.y/cell);
+    let c=cells.get(k);
+    if(!c){c={items:[],latSum:0,lonSum:0};cells.set(k,c)}
+    c.items.push(item);c.latSum+=ll[0];c.lonSum+=ll[1];
+  }
+  return [...cells.values()];
+}
+
+function clearGlobalSearchLayers(){
+  window.__stationLayer.clearLayers();
+  railLayer.clearLayers();
+  hotelLayer.clearLayers();
+  restaurantLayer.clearLayers();
+  tourismLayer.clearLayers();
+}
+
+function renderGlobalSearchClusters(){
+  if(!globalSearchActive)return;
+  clearGlobalSearchLayers();
+
+  const layers={
+    station:window.__stationLayer,
+    rail:railLayer,
+    hotel:hotelLayer,
+    restaurant:restaurantLayer,
+    tourism:tourismLayer
+  };
+
+  let visibleItems=0, visibleObjects=0;
+
+  for(const kind of ['station','rail','hotel','restaurant','tourism']){
+    const groups=buildSearchClusters(kind,GLOBAL_SEARCH_RESULTS[kind]);
+    for(const g of groups){
+      visibleItems+=g.items.length;
+      if(g.items.length===1 || map.getZoom()>=17){
+        const marker=searchSingleMarker(kind,g.items[0]);
+        if(marker){marker.addTo(layers[kind]);visibleObjects++}
+        continue;
+      }
+
+      const lat=g.latSum/g.items.length,lon=g.lonSum/g.items.length;
+      const marker=L.marker([lat,lon],{
+        icon:makeSearchClusterIcon(kind,g.items.length),
+        keyboard:false,
+        riseOnHover:true
+      }).addTo(layers[kind]);
+
+      marker.on('click',()=>{
+        const pts=g.items.map(x=>searchItemLatLon(kind,x))
+          .filter(ll=>Number.isFinite(ll[0])&&Number.isFinite(ll[1]));
+        if(pts.length>1){
+          const b=L.latLngBounds(pts);
+          map.fitBounds(b,{padding:[45,45],maxZoom:Math.min(17,map.getZoom()+3)});
+        }else if(pts.length===1){
+          map.setView(pts[0],Math.min(17,map.getZoom()+3));
+        }
+      });
+      visibleObjects++;
+    }
+  }
+
+  const total=Object.values(GLOBAL_SEARCH_RESULTS).reduce((n,a)=>n+a.length,0);
+  setStatus(
+    `🔎 検索結果 ${total.toLocaleString('ja-JP')}件｜現在範囲 ${visibleItems.toLocaleString('ja-JP')}件を ${visibleObjects.toLocaleString('ja-JP')}個のピン/クラスタで表示`,
+    1800
+  );
+}
+
+function scheduleGlobalSearchClusterRender(){
+  clearTimeout(globalSearchClusterTimer);
+  globalSearchClusterTimer=setTimeout(()=>renderGlobalSearchClusters(),160);
+}
+
 async function runGlobalMapSearch(raw){
   const myRun=++globalSearchRunId;
   const key=norm(raw);
   globalSearchActive=!!key;
 
   if(!key){
+    GLOBAL_SEARCH_RESULTS.station=[];
+    GLOBAL_SEARCH_RESULTS.rail=[];
+    GLOBAL_SEARCH_RESULTS.hotel=[];
+    GLOBAL_SEARCH_RESULTS.restaurant=[];
+    GLOBAL_SEARCH_RESULTS.tourism=[];
+    clearGlobalSearchLayers();
     render('');
-    railLayer.clearLayers();
-    hotelLayer.clearLayers();
-    restaurantLayer.clearLayers();
-    tourismLayer.clearLayers();
     if(railVisible)renderRails();
     if(hotelVisible)renderHotelsForViewport();
     if(restaurantVisible)renderRestaurantsForViewport();
@@ -1691,46 +1842,16 @@ async function runGlobalMapSearch(raw){
     return;
   }
 
-  // 検索優先モード：
-  // 下部の鉄道駅・宿泊施設・飲食店・観光地スイッチがOFFでも無視し、
-  // 道の駅を含む全5カテゴリから一致する施設を必ずピン表示する。
-  railLayer.clearLayers();
-  hotelLayer.clearLayers();
-  restaurantLayer.clearLayers();
-  tourismLayer.clearLayers();
+  clearGlobalSearchLayers();
+  setStatus(`🔎「${raw}」を全カテゴリから検索しています…`,1200);
 
-  const points=[];
-  let total=0,shownTotal=0;
-
-  // 道の駅（施設名・都道府県・市町村・メモ・「道の駅」）
-  const stationMatches=GEO.filter(st=>searchTextMatch(
-    `${st.name} ${st.pref} ${st.loc||''} ${getStationMemo(st.id)} 道の駅`,
-    key
+  GLOBAL_SEARCH_RESULTS.station=GEO.filter(st=>searchTextMatch(
+    `${st.name} ${st.pref} ${st.loc||''} ${getStationMemo(st.id)} 道の駅`,key
   ));
-  const shownStations=searchViewportPreferred(stationMatches,'lat','lon',searchCategoryCap(stationMatches.length));
-  drawStationMarkers(shownStations);
-  total+=stationMatches.length; shownTotal+=shownStations.length;
-  shownStations.forEach(st=>points.push([Number(st.lat),Number(st.lon)]));
-
-  // 鉄道駅（駅名・路線・事業者）
-  const railMatches=RAIL_STATIONS.filter(r=>searchTextMatch(
-    `${r.n||''} ${r.l||''} ${r.o||''} 鉄道駅 駅 電車 鉄道`,
-    key
+  GLOBAL_SEARCH_RESULTS.rail=RAIL_STATIONS.filter(r=>searchTextMatch(
+    `${r.n||''} ${r.l||''} ${r.o||''} 鉄道駅 駅 電車 鉄道`,key
   ));
-  const shownRails=searchViewportPreferred(railMatches,r=>r.la,r=>r.lo,searchCategoryCap(railMatches.length));
-  const railIcon=categoryPinIcon('rail');
-  for(const r of shownRails){
-    const lat=Number(r.la),lon=Number(r.lo);
-    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-    L.marker([lat,lon],{icon:railIcon,title:(r.n||'')+'駅',keyboard:false,riseOnHover:true})
-      .bindPopup(railPopup(r),{maxWidth:280}).addTo(railLayer);
-    points.push([lat,lon]);
-  }
-  total+=railMatches.length; shownTotal+=shownRails.length;
 
-  setStatus(`🔎 軽量検索モード：「${raw}」を全カテゴリから検索中…`,1400);
-
-  // JSON系データを読み込んでから検索
   await Promise.all([
     loadNationwideHotelMaster(),
     loadRestaurantMaster(),
@@ -1739,64 +1860,41 @@ async function runGlobalMapSearch(raw){
   await waitForGlobalSearchMasters();
   if(myRun!==globalSearchRunId || !globalSearchActive)return;
 
-  // 宿泊施設
-  const hotelMatches=HOTEL_MASTER.filter(h=>searchTextMatch(
-    `${h.name||''} ${h.address||''} ${h.hotelSpecial||''} ${h.hotelCatchCopy||''} ホテル 宿泊 宿泊施設 旅館`,
-    key
+  GLOBAL_SEARCH_RESULTS.hotel=HOTEL_MASTER.filter(h=>searchTextMatch(
+    `${h.name||''} ${h.address||''} ${h.hotelSpecial||''} ${h.hotelCatchCopy||''} ホテル 宿泊 宿泊施設 旅館`,key
   ));
-  const shownHotels=searchViewportPreferred(hotelMatches,r=>r._lat,r=>r._lon,searchCategoryCap(hotelMatches.length));
-  const hotelIcon=categoryPinIcon('hotel');
-  for(const h of shownHotels){
-    const lat=Number(h._lat),lon=Number(h._lon);
-    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-    L.marker([lat,lon],{icon:hotelIcon,title:h.name||'宿泊施設',keyboard:false,riseOnHover:true})
-      .bindPopup(hotelPopup(h),{maxWidth:310}).addTo(hotelLayer);
-    points.push([lat,lon]);
-  }
-  total+=hotelMatches.length; shownTotal+=shownHotels.length;
-
-  // 飲食店
-  const restaurantMatches=RESTAURANT_MASTER.filter(r=>searchTextMatch(
-    `${r.name||''} ${r.type||''} ${r.address||''} ${r.openingHours||''} 飲食店 レストラン 食事 グルメ カフェ`,
-    key
+  GLOBAL_SEARCH_RESULTS.restaurant=RESTAURANT_MASTER.filter(r=>searchTextMatch(
+    `${r.name||''} ${r.type||''} ${r.address||''} ${r.openingHours||''} 飲食店 レストラン 食事 グルメ カフェ`,key
   ));
-  const shownRestaurants=searchViewportPreferred(restaurantMatches,'lat','lon',searchCategoryCap(restaurantMatches.length));
-  const restaurantIcon=categoryPinIcon('restaurant');
-  for(const r of shownRestaurants){
-    L.marker([r.lat,r.lon],{icon:restaurantIcon,title:r.name||'飲食店',keyboard:false,riseOnHover:true})
-      .bindPopup(restaurantPopup(r),{maxWidth:300}).addTo(restaurantLayer);
-    points.push([Number(r.lat),Number(r.lon)]);
-  }
-  total+=restaurantMatches.length; shownTotal+=shownRestaurants.length;
-
-  // 観光地・観光施設
-  const allTourism=collectTourismAll();
-  const tourismMatches=allTourism.filter(s=>searchTextMatch(
-    `${s.name||''} ${s.pref||''} ${s.cat||''} ${s.website||''} 観光 観光地 観光施設`,
-    key
+  GLOBAL_SEARCH_RESULTS.tourism=collectTourismAll().filter(s=>searchTextMatch(
+    `${s.name||''} ${s.pref||''} ${s.cat||''} ${s.website||''} 観光 観光地 観光施設`,key
   ));
-  const shownTourism=searchViewportPreferred(tourismMatches,'lat','lon',searchCategoryCap(tourismMatches.length));
-  for(const s of shownTourism){
-    L.marker([s.lat,s.lon],{icon:tourismIcon,title:s.name,keyboard:false,riseOnHover:true})
-      .bindPopup(tourismPopup(s),{maxWidth:300}).addTo(tourismLayer);
-    points.push([Number(s.lat),Number(s.lon)]);
-  }
-  total+=tourismMatches.length; shownTotal+=shownTourism.length;
 
+  const allPoints=[];
+  for(const kind of ['station','rail','hotel','restaurant','tourism']){
+    for(const item of GLOBAL_SEARCH_RESULTS[kind]){
+      const ll=searchItemLatLon(kind,item);
+      if(Number.isFinite(ll[0])&&Number.isFinite(ll[1]))allPoints.push(ll);
+    }
+  }
+
+  const total=Object.values(GLOBAL_SEARCH_RESULTS).reduce((n,a)=>n+a.length,0);
   const badge=document.getElementById('countBadge');
   if(badge)badge.textContent=`検索 ${total.toLocaleString('ja-JP')}件`;
 
   if(total){
-    if(total<=80)fitSearchBounds(points);
-    setStatus(searchRenderStatus(raw,total,shownTotal),2400);
+    if(allPoints.length===1)map.setView(allPoints[0],13);
+    else if(allPoints.length>1)map.fitBounds(allPoints,{padding:[34,34],maxZoom:10});
+    renderGlobalSearchClusters();
   }else{
-    setStatus(`🔎「${raw}」に一致する施設は見つかりませんでした`,2400);
+    clearGlobalSearchLayers();
+    setStatus(`🔎「${raw}」に一致する施設は見つかりませんでした`,2200);
   }
 }
 
 search.addEventListener('input',e=>{
   clearTimeout(timer);
-  timer=setTimeout(()=>runGlobalMapSearch(e.target.value),420);
+  timer=setTimeout(()=>runGlobalMapSearch(e.target.value),260);
 });
 
 let currentLocationMarker=null;
@@ -1888,7 +1986,10 @@ loadRestaurantMaster();
 loadTourismMaster();
 
 map.on('moveend zoomend',()=>{
-  if(globalSearchActive)return;
+  if(globalSearchActive){
+    scheduleGlobalSearchClusterRender();
+    return;
+  }
   scheduleStationRender();
   if(railVisible)scheduleRailRender();
   if(hotelVisible)scheduleHotelViewportRender();
