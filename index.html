@@ -631,7 +631,7 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 </head>
 <body>
 <div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
-  <div class="search"><input id="searchInput" type="search" placeholder="道の駅・都道府県・市町村・メモを検索" autocomplete="off" /></div>
+  <div class="search"><input id="searchInput" type="search" placeholder="施設名・種類・地域・メモを検索" autocomplete="off" /></div>
   <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
     <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
     <a class="top-social-btn fb" href="https://www.facebook.com/search/top/?q=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="Facebookで道の駅を検索">f</a>
@@ -1593,7 +1593,169 @@ render();
 setStatus(`国交省1,231駅をアプリ内データから表示中`,2200);
 setTimeout(()=>render(''),60);
 notice.style.display='none';
-search.addEventListener('input',e=>{clearTimeout(timer);timer=setTimeout(()=>render(e.target.value),170)});
+let globalSearchActive=false;
+let globalSearchRunId=0;
+
+function searchTextMatch(value,key){
+  return norm(String(value||'')).includes(key);
+}
+function searchSampleEvenly(rows,limit){
+  if(rows.length<=limit)return rows;
+  const out=[];
+  const step=rows.length/limit;
+  for(let i=0;i<limit;i++)out.push(rows[Math.floor(i*step)]);
+  return out;
+}
+function collectTourismAll(){
+  const rows=[],seen=new Set();
+  const add=s=>{
+    const lat=Number(s.lat),lon=Number(s.lon);
+    if(!s?.name||!Number.isFinite(lat)||!Number.isFinite(lon))return;
+    const k=norm(s.name)+'|'+lat.toFixed(4)+'|'+lon.toFixed(4);
+    if(seen.has(k))return;
+    seen.add(k);rows.push(s);
+  };
+  TOURISM_SPOTS.forEach(add);
+  TOURISM_MASTER.forEach(add);
+  return rows;
+}
+function fitSearchBounds(points){
+  const valid=points.filter(p=>Array.isArray(p)&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
+  if(!valid.length)return;
+  if(valid.length===1){
+    map.setView(valid[0],Math.max(map.getZoom(),12));
+    return;
+  }
+  map.fitBounds(valid,{padding:[34,34],maxZoom:11});
+}
+async function runGlobalMapSearch(raw){
+  const myRun=++globalSearchRunId;
+  const key=norm(raw);
+  globalSearchActive=!!key;
+
+  if(!key){
+    render('');
+    railLayer.clearLayers();
+    hotelLayer.clearLayers();
+    restaurantLayer.clearLayers();
+    tourismLayer.clearLayers();
+    if(railVisible)renderRails();
+    if(hotelVisible)renderHotelsForViewport();
+    if(restaurantVisible)renderRestaurantsForViewport();
+    if(tourismVisible)renderTourismForViewport();
+    const badge=document.getElementById('countBadge');
+    if(badge)badge.textContent='国交省 1,231駅';
+    setStatus('通常表示に戻しました',1100);
+    return;
+  }
+
+  // 検索中は下部ON/OFFに関係なく全カテゴリを横断検索
+  railLayer.clearLayers();
+  hotelLayer.clearLayers();
+  restaurantLayer.clearLayers();
+  tourismLayer.clearLayers();
+
+  const points=[];
+  let total=0,shownTotal=0;
+
+  // 道の駅（施設名・都道府県・市町村・メモ・「道の駅」）
+  const stationMatches=GEO.filter(st=>searchTextMatch(
+    `${st.name} ${st.pref} ${st.loc||''} ${getStationMemo(st.id)} 道の駅`,
+    key
+  ));
+  const shownStations=searchSampleEvenly(stationMatches,450);
+  drawStationMarkers(shownStations);
+  total+=stationMatches.length; shownTotal+=shownStations.length;
+  shownStations.forEach(st=>points.push([Number(st.lat),Number(st.lon)]));
+
+  // 鉄道駅（駅名・路線・事業者）
+  const railMatches=RAIL_STATIONS.filter(r=>searchTextMatch(
+    `${r.n||''} ${r.l||''} ${r.o||''} 鉄道駅 駅 電車 鉄道`,
+    key
+  ));
+  const shownRails=searchSampleEvenly(railMatches,420);
+  const railIcon=categoryPinIcon('rail');
+  for(const r of shownRails){
+    const lat=Number(r.la),lon=Number(r.lo);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    L.marker([lat,lon],{icon:railIcon,title:(r.n||'')+'駅',keyboard:false,riseOnHover:true})
+      .bindPopup(railPopup(r),{maxWidth:280}).addTo(railLayer);
+    points.push([lat,lon]);
+  }
+  total+=railMatches.length; shownTotal+=shownRails.length;
+
+  setStatus(`🔎「${raw}」を全国の施設から検索しています…`,1200);
+
+  // JSON系データを読み込んでから検索
+  await Promise.all([
+    loadNationwideHotelMaster(),
+    loadRestaurantMaster(),
+    loadTourismMaster()
+  ]);
+  if(myRun!==globalSearchRunId || !globalSearchActive)return;
+
+  // 宿泊施設
+  const hotelMatches=HOTEL_MASTER.filter(h=>searchTextMatch(
+    `${h.name||''} ${h.address||''} ${h.hotelSpecial||''} ${h.hotelCatchCopy||''} ホテル 宿泊 宿泊施設 旅館`,
+    key
+  ));
+  const shownHotels=searchSampleEvenly(hotelMatches,420);
+  const hotelIcon=categoryPinIcon('hotel');
+  for(const h of shownHotels){
+    const lat=Number(h._lat),lon=Number(h._lon);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    L.marker([lat,lon],{icon:hotelIcon,title:h.name||'宿泊施設',keyboard:false,riseOnHover:true})
+      .bindPopup(hotelPopup(h),{maxWidth:310}).addTo(hotelLayer);
+    points.push([lat,lon]);
+  }
+  total+=hotelMatches.length; shownTotal+=shownHotels.length;
+
+  // 飲食店
+  const restaurantMatches=RESTAURANT_MASTER.filter(r=>searchTextMatch(
+    `${r.name||''} ${r.type||''} ${r.address||''} ${r.openingHours||''} 飲食店 レストラン 食事 グルメ カフェ`,
+    key
+  ));
+  const shownRestaurants=searchSampleEvenly(restaurantMatches,420);
+  const restaurantIcon=categoryPinIcon('restaurant');
+  for(const r of shownRestaurants){
+    L.marker([r.lat,r.lon],{icon:restaurantIcon,title:r.name||'飲食店',keyboard:false,riseOnHover:true})
+      .bindPopup(restaurantPopup(r),{maxWidth:300}).addTo(restaurantLayer);
+    points.push([Number(r.lat),Number(r.lon)]);
+  }
+  total+=restaurantMatches.length; shownTotal+=shownRestaurants.length;
+
+  // 観光地・観光施設
+  const allTourism=collectTourismAll();
+  const tourismMatches=allTourism.filter(s=>searchTextMatch(
+    `${s.name||''} ${s.pref||''} ${s.cat||''} ${s.website||''} 観光 観光地 観光施設`,
+    key
+  ));
+  const shownTourism=searchSampleEvenly(tourismMatches,650);
+  for(const s of shownTourism){
+    L.marker([s.lat,s.lon],{icon:tourismIcon,title:s.name,keyboard:false,riseOnHover:true})
+      .bindPopup(tourismPopup(s),{maxWidth:300}).addTo(tourismLayer);
+    points.push([Number(s.lat),Number(s.lon)]);
+  }
+  total+=tourismMatches.length; shownTotal+=shownTourism.length;
+
+  const badge=document.getElementById('countBadge');
+  if(badge)badge.textContent=`検索 ${total.toLocaleString('ja-JP')}件`;
+
+  if(total){
+    fitSearchBounds(points);
+    setStatus(
+      `🔎「${raw}」に関係する施設 ${total.toLocaleString('ja-JP')}件中 ${shownTotal.toLocaleString('ja-JP')}件を地図に表示`,
+      2400
+    );
+  }else{
+    setStatus(`🔎「${raw}」に一致する施設は見つかりませんでした`,2400);
+  }
+}
+
+search.addEventListener('input',e=>{
+  clearTimeout(timer);
+  timer=setTimeout(()=>runGlobalMapSearch(e.target.value),230);
+});
 
 let currentLocationMarker=null;
 function showCurrentLocation(lat,lon,follow=false){
@@ -1626,6 +1788,7 @@ const railToggleState=document.getElementById('railToggleState');
 railToggle.addEventListener('change',()=>{
   railVisible=railToggle.checked;
   railToggleState.textContent=railVisible?'ON':'OFF';
+  if(globalSearchActive){runGlobalMapSearch(search.value);return;}
   if(railVisible){
     renderRails();
   }else{
@@ -1642,6 +1805,7 @@ const hotelToggleState=document.getElementById('hotelToggleState');
 hotelToggle?.addEventListener('change',()=>{
   hotelVisible=hotelToggle.checked;
   hotelToggleState.textContent=hotelVisible?'ON':'OFF';
+  if(globalSearchActive){runGlobalMapSearch(search.value);return;}
   if(hotelVisible){
     renderHotelsForViewport();
   }else{
@@ -1654,6 +1818,7 @@ const restaurantToggleState=document.getElementById('restaurantToggleState');
 restaurantToggle?.addEventListener('change',()=>{
   restaurantVisible=restaurantToggle.checked;
   restaurantToggleState.textContent=restaurantVisible?'ON':'OFF';
+  if(globalSearchActive){runGlobalMapSearch(search.value);return;}
   if(restaurantVisible){
     renderRestaurantsForViewport();
   }else{
@@ -1667,6 +1832,7 @@ const tourismToggleState=document.getElementById('tourismToggleState');
 tourismToggle?.addEventListener('change',()=>{
   tourismVisible=tourismToggle.checked;
   tourismToggleState.textContent=tourismVisible?'ON':'OFF';
+  if(globalSearchActive){runGlobalMapSearch(search.value);return;}
   if(tourismVisible){
     renderTourismForViewport();
   }else{
@@ -1680,6 +1846,7 @@ loadRestaurantMaster();
 loadTourismMaster();
 
 map.on('moveend zoomend',()=>{
+  if(globalSearchActive)return;
   scheduleStationRender();
   if(railVisible)scheduleRailRender();
   if(hotelVisible)scheduleHotelViewportRender();
