@@ -1606,6 +1606,37 @@ function searchSampleEvenly(rows,limit){
   for(let i=0;i<limit;i++)out.push(rows[Math.floor(i*step)]);
   return out;
 }
+function searchCategoryCap(total){
+  // iPhone向け：検索結果は全件を数えるが、描画ピン数は制限
+  if(total<=30)return total;
+  if(total<=100)return 60;
+  if(total<=500)return 90;
+  return 120;
+}
+function searchViewportPreferred(rows,latKey='lat',lonKey='lon',limit=120){
+  if(!rows.length)return rows;
+  const b=map.getBounds().pad(0.35);
+  const inView=[], outView=[];
+  for(const r of rows){
+    const lat=Number(typeof latKey==='function'?latKey(r):r[latKey]);
+    const lon=Number(typeof lonKey==='function'?lonKey(r):r[lonKey]);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    (b.contains([lat,lon])?inView:outView).push(r);
+  }
+  const picked=[];
+  const first=searchSampleEvenly(inView,Math.min(limit,inView.length));
+  picked.push(...first);
+  const left=limit-picked.length;
+  if(left>0)picked.push(...searchSampleEvenly(outView,left));
+  return picked;
+}
+function searchRenderStatus(raw,total,shownTotal){
+  const hidden=Math.max(0,total-shownTotal);
+  return hidden
+    ? `🔎「${raw}」：${total.toLocaleString('ja-JP')}件ヒット、軽量表示で${shownTotal.toLocaleString('ja-JP')}件をピン表示`
+    : `🔎「${raw}」：${total.toLocaleString('ja-JP')}件をピン表示`;
+}
+
 function collectTourismAll(){
   const rows=[],seen=new Set();
   const add=s=>{
@@ -1676,7 +1707,7 @@ async function runGlobalMapSearch(raw){
     `${st.name} ${st.pref} ${st.loc||''} ${getStationMemo(st.id)} 道の駅`,
     key
   ));
-  const shownStations=searchSampleEvenly(stationMatches,450);
+  const shownStations=searchViewportPreferred(stationMatches,'lat','lon',searchCategoryCap(stationMatches.length));
   drawStationMarkers(shownStations);
   total+=stationMatches.length; shownTotal+=shownStations.length;
   shownStations.forEach(st=>points.push([Number(st.lat),Number(st.lon)]));
@@ -1686,7 +1717,7 @@ async function runGlobalMapSearch(raw){
     `${r.n||''} ${r.l||''} ${r.o||''} 鉄道駅 駅 電車 鉄道`,
     key
   ));
-  const shownRails=searchSampleEvenly(railMatches,420);
+  const shownRails=searchViewportPreferred(railMatches,r=>r.la,r=>r.lo,searchCategoryCap(railMatches.length));
   const railIcon=categoryPinIcon('rail');
   for(const r of shownRails){
     const lat=Number(r.la),lon=Number(r.lo);
@@ -1697,7 +1728,7 @@ async function runGlobalMapSearch(raw){
   }
   total+=railMatches.length; shownTotal+=shownRails.length;
 
-  setStatus(`🔎 検索優先モード：「${raw}」を道の駅・鉄道駅・宿泊施設・飲食店・観光施設から検索中…`,1400);
+  setStatus(`🔎 軽量検索モード：「${raw}」を全カテゴリから検索中…`,1400);
 
   // JSON系データを読み込んでから検索
   await Promise.all([
@@ -1713,7 +1744,7 @@ async function runGlobalMapSearch(raw){
     `${h.name||''} ${h.address||''} ${h.hotelSpecial||''} ${h.hotelCatchCopy||''} ホテル 宿泊 宿泊施設 旅館`,
     key
   ));
-  const shownHotels=searchSampleEvenly(hotelMatches,420);
+  const shownHotels=searchViewportPreferred(hotelMatches,r=>r._lat,r=>r._lon,searchCategoryCap(hotelMatches.length));
   const hotelIcon=categoryPinIcon('hotel');
   for(const h of shownHotels){
     const lat=Number(h._lat),lon=Number(h._lon);
@@ -1729,7 +1760,7 @@ async function runGlobalMapSearch(raw){
     `${r.name||''} ${r.type||''} ${r.address||''} ${r.openingHours||''} 飲食店 レストラン 食事 グルメ カフェ`,
     key
   ));
-  const shownRestaurants=searchSampleEvenly(restaurantMatches,420);
+  const shownRestaurants=searchViewportPreferred(restaurantMatches,'lat','lon',searchCategoryCap(restaurantMatches.length));
   const restaurantIcon=categoryPinIcon('restaurant');
   for(const r of shownRestaurants){
     L.marker([r.lat,r.lon],{icon:restaurantIcon,title:r.name||'飲食店',keyboard:false,riseOnHover:true})
@@ -1744,7 +1775,7 @@ async function runGlobalMapSearch(raw){
     `${s.name||''} ${s.pref||''} ${s.cat||''} ${s.website||''} 観光 観光地 観光施設`,
     key
   ));
-  const shownTourism=searchSampleEvenly(tourismMatches,650);
+  const shownTourism=searchViewportPreferred(tourismMatches,'lat','lon',searchCategoryCap(tourismMatches.length));
   for(const s of shownTourism){
     L.marker([s.lat,s.lon],{icon:tourismIcon,title:s.name,keyboard:false,riseOnHover:true})
       .bindPopup(tourismPopup(s),{maxWidth:300}).addTo(tourismLayer);
@@ -1756,11 +1787,8 @@ async function runGlobalMapSearch(raw){
   if(badge)badge.textContent=`検索 ${total.toLocaleString('ja-JP')}件`;
 
   if(total){
-    fitSearchBounds(points);
-    setStatus(
-      `🔎「${raw}」：全カテゴリ横断 ${total.toLocaleString('ja-JP')}件中 ${shownTotal.toLocaleString('ja-JP')}件をピン表示（下部ON/OFFは無視）`,
-      2400
-    );
+    if(total<=80)fitSearchBounds(points);
+    setStatus(searchRenderStatus(raw,total,shownTotal),2400);
   }else{
     setStatus(`🔎「${raw}」に一致する施設は見つかりませんでした`,2400);
   }
@@ -1768,7 +1796,7 @@ async function runGlobalMapSearch(raw){
 
 search.addEventListener('input',e=>{
   clearTimeout(timer);
-  timer=setTimeout(()=>runGlobalMapSearch(e.target.value),230);
+  timer=setTimeout(()=>runGlobalMapSearch(e.target.value),420);
 });
 
 let currentLocationMarker=null;
