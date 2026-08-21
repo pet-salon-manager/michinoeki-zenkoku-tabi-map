@@ -1,0 +1,13 @@
+Supabase Dashboardで一度だけ設定してください。
+
+Authentication → URL Configuration
+
+Site URL:
+https://pet-salon-manager.github.io/michinoeki-zenkoku-tabi-map/
+
+Redirect URLs:
+https://pet-salon-manager.github.io/michinoeki-zenkoku-tabi-map/**
+https://pet-salon-manager.github.io/michinoeki-zenkoku-tabi-map/
+
+保存後、アプリの「パスワードを忘れた方・再設定メールを送る」から新しい再設定メールを送ってください。
+古いメールのリンクは使わず、新しく届いたメールの Reset password を押してください。

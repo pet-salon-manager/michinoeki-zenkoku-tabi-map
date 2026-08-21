@@ -748,6 +748,12 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
   .admin-sheet{border-radius:20px 20px 0 0;max-height:92vh}
 }
 
+
+/* ===== Supabase パスワード再設定 ===== */
+#adminResetRequestBtn{margin-top:7px!important}
+#adminPasswordRecoveryView .admin-field{font-size:16px}
+#adminRecoveryStatus{min-height:18px}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -830,8 +836,21 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
       <input id="adminEmailInput" class="admin-field" type="email" placeholder="管理者メールアドレス" autocomplete="username">
       <input id="adminPasswordInput" class="admin-field" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top:7px">
       <button id="adminLoginBtn" class="admin-btn" type="button">Supabaseでログイン</button>
+      <button id="adminResetRequestBtn" class="admin-btn secondary" type="button">パスワードを忘れた方・再設定メールを送る</button>
       <div id="adminLoginStatus" class="admin-login-status"></div>
       <button id="adminCloseLoginBtn" class="admin-btn secondary" type="button">閉じる</button>
+    </div>
+
+    <div id="adminPasswordRecoveryView" style="display:none">
+      <h2>🔑 新しいパスワードを設定</h2>
+      <div class="admin-note">
+        Supabaseのパスワード再設定リンクから開かれました。新しいパスワードを2回入力してください。
+      </div>
+      <input id="adminNewPassword" class="admin-field" type="password" placeholder="新しいパスワード（8文字以上）" autocomplete="new-password">
+      <input id="adminNewPasswordConfirm" class="admin-field" type="password" placeholder="新しいパスワードをもう一度" autocomplete="new-password" style="margin-top:7px">
+      <button id="adminUpdatePasswordBtn" class="admin-btn" type="button">新しいパスワードに変更</button>
+      <div id="adminRecoveryStatus" class="admin-login-status"></div>
+      <button id="adminCancelRecoveryBtn" class="admin-btn secondary" type="button">閉じる</button>
     </div>
 
     <div id="adminPanelView" style="display:none">
@@ -2253,7 +2272,29 @@ let adminUnlocked=false;
 let currentAdminUser=null;
 let recommendedOnlyMode=false;
 let cloudRecommendations={};
+let passwordRecoveryMode=false;
 const recommendedLayer=L.layerGroup().addTo(map);
+
+function showPasswordRecoveryView(message=''){
+  passwordRecoveryMode=true;
+  adminModal?.classList.add('show');
+  adminModal?.setAttribute('aria-hidden','false');
+  if(adminLoginView)adminLoginView.style.display='none';
+  if(adminPanelView)adminPanelView.style.display='none';
+  const v=document.getElementById('adminPasswordRecoveryView');
+  if(v)v.style.display='block';
+  const s=document.getElementById('adminRecoveryStatus');
+  if(s)s.textContent=message;
+}
+function hidePasswordRecoveryView(){
+  passwordRecoveryMode=false;
+  const v=document.getElementById('adminPasswordRecoveryView');
+  if(v)v.style.display='none';
+}
+function appRecoveryRedirectUrl(){
+  // GitHub Pages上の現在のアプリURLへ戻す（?や#は除外）
+  return window.location.origin + window.location.pathname;
+}
 
 function facilityKey(kind,item){
   if(kind==='station')return `station:${item.id}`;
@@ -2369,6 +2410,11 @@ async function refreshAdminSession(){
 function openAdminModal(){
   adminModal?.classList.add('show');
   adminModal?.setAttribute('aria-hidden','false');
+  if(passwordRecoveryMode){
+    showPasswordRecoveryView();
+    return;
+  }
+  hidePasswordRecoveryView();
   if(!cloudDb){
     adminLoginView.style.display='block';
     adminPanelView.style.display='none';
@@ -2383,11 +2429,75 @@ function openAdminModal(){
 function closeAdminModal(){
   adminModal?.classList.remove('show');
   adminModal?.setAttribute('aria-hidden','true');
+  if(!passwordRecoveryMode)hidePasswordRecoveryView();
 }
 document.getElementById('adminOpenBtn')?.addEventListener('click',openAdminModal);
 document.getElementById('adminCloseLoginBtn')?.addEventListener('click',closeAdminModal);
 document.getElementById('adminClosePanelBtn')?.addEventListener('click',closeAdminModal);
 adminModal?.addEventListener('click',e=>{if(e.target===adminModal)closeAdminModal()});
+
+
+document.getElementById('adminResetRequestBtn')?.addEventListener('click',async()=>{
+  const email=(document.getElementById('adminEmailInput')?.value||'').trim();
+  const status=document.getElementById('adminLoginStatus');
+  if(!cloudDb){
+    status.textContent='Supabase接続設定を確認してください。';
+    return;
+  }
+  if(!email){
+    status.textContent='先に管理者メールアドレスを入力してください。';
+    return;
+  }
+  status.textContent='パスワード再設定メールを送信しています…';
+  const {error}=await cloudDb.auth.resetPasswordForEmail(email,{
+    redirectTo:appRecoveryRedirectUrl()
+  });
+  if(error){
+    status.textContent='再設定メールを送れませんでした: '+error.message;
+    return;
+  }
+  status.textContent='再設定メールを送信しました。メール内の「Reset password」を押してください。';
+});
+
+document.getElementById('adminUpdatePasswordBtn')?.addEventListener('click',async()=>{
+  const p1=document.getElementById('adminNewPassword')?.value||'';
+  const p2=document.getElementById('adminNewPasswordConfirm')?.value||'';
+  const status=document.getElementById('adminRecoveryStatus');
+  if(!cloudDb){
+    status.textContent='Supabase接続設定を確認してください。';
+    return;
+  }
+  if(p1.length<8){
+    status.textContent='新しいパスワードは8文字以上にしてください。';
+    return;
+  }
+  if(p1!==p2){
+    status.textContent='2つのパスワードが一致していません。';
+    return;
+  }
+  status.textContent='パスワードを変更しています…';
+  const {data,error}=await cloudDb.auth.updateUser({password:p1});
+  if(error){
+    status.textContent='パスワードを変更できませんでした: '+error.message;
+    return;
+  }
+  document.getElementById('adminNewPassword').value='';
+  document.getElementById('adminNewPasswordConfirm').value='';
+  status.textContent='パスワードを変更しました。管理者ログインへ戻ります。';
+  await new Promise(r=>setTimeout(r,900));
+  hidePasswordRecoveryView();
+  await cloudDb.auth.signOut();
+  adminUnlocked=false;currentAdminUser=null;
+  if(adminLoginView)adminLoginView.style.display='block';
+  if(adminPanelView)adminPanelView.style.display='none';
+  const ls=document.getElementById('adminLoginStatus');
+  if(ls)ls.textContent='新しいパスワードでログインしてください。';
+});
+
+document.getElementById('adminCancelRecoveryBtn')?.addEventListener('click',()=>{
+  hidePasswordRecoveryView();
+  closeAdminModal();
+});
 
 document.getElementById('adminLoginBtn')?.addEventListener('click',async()=>{
   const email=(document.getElementById('adminEmailInput')?.value||'').trim();
@@ -2497,10 +2607,36 @@ adminFacilitySearch?.addEventListener('input',()=>{
 document.getElementById('adminShowRecommendedBtn')?.addEventListener('click',()=>renderAdminSearch(true));
 
 if(cloudDb){
-  cloudDb.auth.onAuthStateChange(async(_event,session)=>{
+  cloudDb.auth.onAuthStateChange(async(event,session)=>{
     currentAdminUser=session?.user||null;
+
+    if(event==='PASSWORD_RECOVERY'){
+      showPasswordRecoveryView('新しいパスワードを設定してください。');
+      return;
+    }
+
     adminUnlocked=await isCurrentUserAdmin(currentAdminUser);
   });
+
+  // Safari/Yahooメール内ブラウザ等でイベントを取りこぼした場合の保険
+  (async()=>{
+    try{
+      const hash=window.location.hash||'';
+      const query=window.location.search||'';
+      const looksRecovery =
+        hash.includes('type=recovery') ||
+        query.includes('type=recovery') ||
+        hash.includes('access_token=');
+      if(looksRecovery){
+        // detectSessionInUrl がセッションを取り込む時間を少し待つ
+        await new Promise(r=>setTimeout(r,500));
+        const {data}=await cloudDb.auth.getSession();
+        if(data?.session){
+          showPasswordRecoveryView('新しいパスワードを設定してください。');
+        }
+      }
+    }catch(e){}
+  })();
 }
 refreshAdminSession();
 loadCloudRecommendations(true);
