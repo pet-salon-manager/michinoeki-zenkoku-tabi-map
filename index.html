@@ -634,6 +634,54 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 .search-cluster-bubble.tourism{background:#8e35ad}
 .search-cluster-bubble span{font-size:13px}
 
+
+/* ===== 通常の道の駅もクラスタ表示 / 現在地ボタン / 下部2×2 ===== */
+.normal-station-cluster-icon{background:transparent!important;border:0!important}
+.normal-station-cluster{
+  min-width:40px;height:40px;padding:0 9px;border-radius:999px;
+  display:flex;align-items:center;justify-content:center;
+  background:#3f8a49;color:#fff;font-size:13px;font-weight:900;
+  border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.32);
+  white-space:nowrap
+}
+.top-social-stack{display:flex;flex-direction:column;gap:5px;flex:0 0 auto}
+.top-social-stack .top-social-buttons{display:flex;gap:5px}
+.jump-current-btn{
+  width:100%!important;min-height:30px!important;height:30px!important;
+  padding:0 6px!important;border-radius:9px!important;
+  background:#2f8fe3!important;color:#fff!important;
+  font-size:11px!important;font-weight:900!important;line-height:1!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.14)!important;
+  white-space:nowrap!important
+}
+
+/* 4つのON/OFFを常に2列×2段にする */
+.rail-fixed-bar{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:6px!important;
+  padding:7px 7px calc(8px + env(safe-area-inset-bottom))!important;
+}
+.rail-fixed-bar .show-top-menu-btn,
+.rail-fixed-bar .rail-fixed-title{grid-column:1/-1!important}
+.rail-fixed-bar .rail-switch,
+.rail-fixed-bar .hotel-switch,
+.rail-fixed-bar .restaurant-switch,
+.rail-fixed-bar .tourism-switch{
+  min-width:0!important;
+  width:100%!important;
+  justify-content:center!important;
+  padding:8px 5px!important;
+  gap:4px!important
+}
+@media(max-width:520px){
+  .rail-fixed-bar{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;padding-left:6px!important;padding-right:6px!important}
+  .rail-fixed-bar .rail-switch,.rail-fixed-bar .hotel-switch,.rail-fixed-bar .restaurant-switch,.rail-fixed-bar .tourism-switch{padding:8px 4px!important;gap:4px!important}
+  .tourism-switch-state,.restaurant-switch-state{display:inline-block!important}
+  .tourism-switch-label,.restaurant-switch-label{font-size:10px!important}
+  .top-social-btn{width:32px;height:32px}
+  .jump-current-btn{height:29px!important;min-height:29px!important;font-size:10px!important}
+}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -649,10 +697,13 @@ body{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
 <body>
 <div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
   <div class="search"><input id="searchInput" type="search" placeholder="施設名・種類・地域・メモを検索" autocomplete="off" /></div>
-  <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
-    <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
-    <a class="top-social-btn fb" href="https://www.facebook.com/search/top/?q=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="Facebookで道の駅を検索">f</a>
-    <a class="top-social-btn yt" href="https://www.youtube.com/results?search_query=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="YouTubeで道の駅を検索">▶</a>
+  <div class="top-social-stack">
+    <button type="button" id="jumpCurrentBtn" class="jump-current-btn" aria-label="現在地まで地図を移動">📍 現在地</button>
+    <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
+      <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
+      <a class="top-social-btn fb" href="https://www.facebook.com/search/top/?q=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="Facebookで道の駅を検索">f</a>
+      <a class="top-social-btn yt" href="https://www.youtube.com/results?search_query=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="YouTubeで道の駅を検索">▶</a>
+    </div>
   </div>
 </div></div></header>
 <div class="mapwrap">
@@ -964,35 +1015,96 @@ function drawStationMarkers(shown){
   });
 }
 
+function normalStationClusterCellSize(z){
+  if(z<=5)return 90;
+  if(z<=7)return 80;
+  if(z<=9)return 70;
+  if(z<=11)return 60;
+  if(z<=13)return 50;
+  return 42;
+}
+
+function makeNormalStationClusterIcon(count){
+  const w=Math.max(40,27+String(count).length*8);
+  return L.divIcon({
+    className:'normal-station-cluster-icon',
+    html:`<div class="normal-station-cluster">${count}</div>`,
+    iconSize:[w,40],
+    iconAnchor:[Math.round(w/2),20]
+  });
+}
+
+function drawNormalStationClusters(stations){
+  const layer=window.__stationLayer,map=window.__stationMap;
+  layer.clearLayers();
+  const z=map.getZoom();
+
+  // 十分に拡大したら通常の個別ピンへ
+  if(z>=15){
+    drawStationMarkers(stations);
+    return stations.length;
+  }
+
+  const cell=normalStationClusterCellSize(z);
+  const cells=new Map();
+  for(const st of stations){
+    const lat=Number(st.lat),lon=Number(st.lon);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+    const pt=map.project([lat,lon],z);
+    const k=Math.floor(pt.x/cell)+'|'+Math.floor(pt.y/cell);
+    let g=cells.get(k);
+    if(!g){g={items:[],latSum:0,lonSum:0};cells.set(k,g)}
+    g.items.push(st);g.latSum+=lat;g.lonSum+=lon;
+  }
+
+  for(const g of cells.values()){
+    if(g.items.length===1){
+      const st=g.items[0],lat=Number(st.lat),lon=Number(st.lon);
+      const stationIcon=L.divIcon({
+        className:'michi-station-icon',
+        html:`<div class="michi-pin ${st.approx?'approx':''}"><span></span></div>`,
+        iconSize:[30,38],iconAnchor:[15,36],popupAnchor:[0,-34]
+      });
+      const marker=L.marker([lat,lon],{icon:stationIcon,title:st.name,keyboard:false,riseOnHover:true}).addTo(layer);
+      marker.on('click',()=>{
+        L.popup({maxWidth:300,autoPan:true,closeButton:true,offset:[0,-22]})
+         .setLatLng([lat,lon]).setContent(popup(st,lat,lon)).openOn(map);
+      });
+    }else{
+      const lat=g.latSum/g.items.length,lon=g.lonSum/g.items.length;
+      const marker=L.marker([lat,lon],{
+        icon:makeNormalStationClusterIcon(g.items.length),
+        keyboard:false,riseOnHover:true
+      }).addTo(layer);
+      marker.on('click',()=>{
+        const pts=g.items.map(st=>[Number(st.lat),Number(st.lon)])
+          .filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));
+        if(pts.length){
+          map.fitBounds(pts,{padding:[45,45],maxZoom:Math.min(15,map.getZoom()+3)});
+        }
+      });
+    }
+  }
+  return cells.size;
+}
+
 function render(q=''){
   if(!window.__stationLayer||!window.__stationMap)return;
   const map=window.__stationMap;
   const key=norm(q);
 
-  // Search is allowed across all 1,231 stations.
-  if(key){
-    const matched=GEO.filter(st=>norm(`${st.name}${st.pref}${st.loc||''}${getStationMemo(st.id)}`).includes(key));
-    drawStationMarkers(matched.slice(0,600));
-    const badge=document.getElementById('countBadge');
-    if(badge)badge.textContent=`${matched.length}駅検索`;
-    if(matched.length){
-      const b=matched.map(st=>[Number(st.lat),Number(st.lon)]).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));
-      if(b.length)map.fitBounds(b,{padding:[28,28],maxZoom:11});
-    }
-    return;
-  }
+  // 検索時は全カテゴリ横断クラスタ検索側が描画する。
+  if(key)return;
 
-  const bounds=map.getBounds();
+  const bounds=map.getBounds().pad(0.08);
   const inView=GEO.filter(st=>{
     const lat=Number(st.lat),lon=Number(st.lon);
     return Number.isFinite(lat)&&Number.isFinite(lon)&&bounds.contains([lat,lon]);
   });
-  const limit=stationLimitForZoom(map.getZoom());
-  const shown=pickStationsEvenly(inView,limit,bounds);
-  drawStationMarkers(shown);
 
+  const objects=drawNormalStationClusters(inView);
   const badge=document.getElementById('countBadge');
-  if(badge)badge.textContent=`道の駅 ${shown.length}/${inView.length}駅`;
+  if(badge)badge.textContent=`道の駅 ${inView.length}駅 / ${objects}表示`;
 }
 
 function scheduleStationRender(){
@@ -1921,6 +2033,31 @@ if(navigator.geolocation){
   {enableHighAccuracy:true,maximumAge:15000,timeout:15000}
  );
 }
+
+const jumpCurrentBtn=document.getElementById('jumpCurrentBtn');
+jumpCurrentBtn?.addEventListener('click',()=>{
+  if(Array.isArray(window.__currentPos) && window.__currentPos.length===2){
+    map.setView(window.__currentPos,Math.max(14,map.getZoom()));
+    currentLocationMarker?.openPopup();
+    setStatus('📍 現在地へ移動しました',1200);
+    return;
+  }
+  if(!navigator.geolocation){
+    setStatus('この端末では位置情報を利用できません',2200);
+    return;
+  }
+  setStatus('📍 現在地を取得しています…',1400);
+  navigator.geolocation.getCurrentPosition(
+    p=>{
+      showCurrentLocation(p.coords.latitude,p.coords.longitude,false);
+      map.setView([p.coords.latitude,p.coords.longitude],14);
+      currentLocationMarker?.openPopup();
+      setStatus('📍 現在地へ移動しました',1200);
+    },
+    ()=>setStatus('現在地を表示するにはSafariの位置情報を許可してください',3000),
+    {enableHighAccuracy:true,maximumAge:10000,timeout:15000}
+  );
+});
 
 
 const railToggle=document.getElementById('railToggle');
