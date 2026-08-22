@@ -1277,6 +1277,40 @@ button:active{filter:brightness(.97)}
   margin-top:5px!important;font-size:10px!important;line-height:1.45!important;color:#74685f!important
 }
 
+
+/* ===== 道の駅 → 周辺の楽天トラベル予約導線 ===== */
+.station-hotel-affiliate-box{
+  margin-top:10px;padding:9px;border:1px solid #d8cab4;border-radius:12px;
+  background:linear-gradient(180deg,#fffdf8,#f6f1e7)
+}
+.station-hotel-affiliate-title{
+  font-size:12px;font-weight:900;color:#5b4a35;margin-bottom:6px
+}
+.station-hotel-affiliate-btn{
+  width:100%;border:0;border-radius:11px;padding:10px 9px;
+  background:linear-gradient(135deg,#648f59,#47753f);color:#fff;
+  font-weight:900;font-size:12px;box-shadow:0 4px 10px rgba(65,100,58,.16)
+}
+.station-hotel-affiliate-note{
+  margin-top:4px;text-align:center;font-size:9px;color:#8a7b70
+}
+.station-nearby-hotels{margin-top:7px}
+.station-nearby-hotel{
+  padding:8px 0;border-top:1px dashed #ddd0bf
+}
+.station-nearby-hotel:first-child{border-top:0}
+.station-nearby-hotel-name{
+  font-size:11px;font-weight:900;color:#4e493f;line-height:1.35
+}
+.station-nearby-hotel-meta{
+  margin-top:2px;font-size:9px;color:#7b746b;line-height:1.4
+}
+.station-nearby-hotel-book{
+  display:block;margin-top:5px;padding:7px 8px;border-radius:9px;
+  background:#4f8050;color:#fff!important;text-decoration:none!important;
+  text-align:center;font-size:10px;font-weight:900
+}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1528,6 +1562,13 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
         ${stationMemo?`<div class="station-memo-preview">${esc(stationMemo)}</div>`:''}
         <button type="button" class="station-memo-open" onclick="openStationMemoPage(${Number(s.id)})">${stationMemo?'メモを開く・修正':'メモを保存'}</button>
         <div class="station-memo-note">ボタンを押すとメモ専用画面が開きます。</div>
+      </div>
+
+      <div class="station-hotel-affiliate-box">
+        <div class="station-hotel-affiliate-title">🏨 この道の駅周辺の宿</div>
+        <button type="button" class="station-hotel-affiliate-btn" onclick="showStationNearbyHotels(${Number(s.id)},${Number(s.lat)},${Number(s.lon)})">楽天トラベルで周辺の宿を予約</button>
+        <div class="station-hotel-affiliate-note">PR：楽天アフィリエイトを利用しています</div>
+        <div class="station-nearby-hotels" id="stationNearbyHotels-${Number(s.id)}"></div>
       </div>
 
       <div class="popup-route-title">📍 現在地からの移動方法</div>
@@ -2243,6 +2284,48 @@ function recordRakutenClick(h){
     if(rows.length>100)rows.splice(0,rows.length-100);
     localStorage.setItem(key,JSON.stringify(rows));
   }catch(e){}
+}
+
+
+async function showStationNearbyHotels(stationId,lat,lon){
+  const box=document.getElementById(`stationNearbyHotels-${Number(stationId)}`);
+  if(!box)return;
+
+  box.innerHTML='<div style="font-size:10px;color:#746d63;padding:7px 0">周辺の宿を読み込んでいます…</div>';
+
+  try{
+    const hotels=await loadNationwideHotelMaster();
+    const la=Number(lat),lo=Number(lon);
+
+    const nearest=(Array.isArray(hotels)?hotels:[])
+      .map(h=>({h,d:haversineKm(la,lo,Number(h._lat),Number(h._lon))}))
+      .filter(x=>Number.isFinite(x.d)&&rakutenAffiliateUrl(x.h))
+      .sort((a,b)=>a.d-b.d)
+      .slice(0,5);
+
+    if(!nearest.length){
+      box.innerHTML='<div style="font-size:10px;color:#746d63;padding:7px 0">周辺の楽天トラベル掲載宿が見つかりませんでした。</div>';
+      return;
+    }
+
+    box.innerHTML=nearest.map(({h,d})=>{
+      const u=rakutenAffiliateUrl(h);
+      const price=h.hotelMinCharge!=null&&Number.isFinite(Number(h.hotelMinCharge))
+        ? `・¥${Number(h.hotelMinCharge).toLocaleString('ja-JP')}〜`
+        : '';
+      return `<div class="station-nearby-hotel">
+        <div class="station-nearby-hotel-name">🏨 ${esc(h.name||'宿泊施設')}</div>
+        <div class="station-nearby-hotel-meta">道の駅から約 ${d.toFixed(1)}km${price}<br>${esc(h.address||'')}</div>
+        <a class="station-nearby-hotel-book"
+           href="${esc(u)}"
+           target="_blank"
+           rel="sponsored noopener noreferrer"
+           onclick="recordRakutenClick({name:${JSON.stringify(String(h.name||''))}})">楽天トラベルで予約</a>
+      </div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML='<div style="font-size:10px;color:#a34b3e;padding:7px 0">宿泊施設を読み込めませんでした。もう一度お試しください。</div>';
+  }
 }
 
 function hotelPopup(h){
