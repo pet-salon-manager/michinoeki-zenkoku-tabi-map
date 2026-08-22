@@ -1287,9 +1287,11 @@ button:active{filter:brightness(.97)}
   font-size:12px;font-weight:900;color:#5b4a35;margin-bottom:6px
 }
 .station-hotel-affiliate-btn{
-  width:100%;border:0;border-radius:11px;padding:10px 9px;
+  width:100%;border:0;border-radius:11px;padding:12px 9px;
   background:linear-gradient(135deg,#648f59,#47753f);color:#fff;
-  font-weight:900;font-size:12px;box-shadow:0 4px 10px rgba(65,100,58,.16)
+  font-weight:900;font-size:12px;box-shadow:0 4px 10px rgba(65,100,58,.16);
+  cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  position:relative;z-index:30;pointer-events:auto
 }
 .station-hotel-affiliate-note{
   margin-top:4px;text-align:center;font-size:9px;color:#8a7b70
@@ -1566,7 +1568,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
       <div class="station-hotel-affiliate-box">
         <div class="station-hotel-affiliate-title">🏨 この道の駅周辺の宿</div>
-        <button type="button" class="station-hotel-affiliate-btn" onclick="showStationNearbyHotels(${Number(s.id)},${Number(s.lat)},${Number(s.lon)})">楽天トラベルで周辺の宿を予約</button>
+        <button type="button" class="station-hotel-affiliate-btn" data-station-id="${Number(s.id)}" data-lat="${Number(s.lat)}" data-lon="${Number(s.lon)}" onclick="event.preventDefault();event.stopPropagation();window.showStationNearbyHotels(${Number(s.id)},${Number(s.lat)},${Number(s.lon)});return false;">楽天トラベルで周辺の宿を予約</button>
         <div class="station-hotel-affiliate-note">PR：楽天アフィリエイトを利用しています</div>
         <div class="station-nearby-hotels" id="stationNearbyHotels-${Number(s.id)}"></div>
       </div>
@@ -2287,7 +2289,7 @@ function recordRakutenClick(h){
 }
 
 
-async function showStationNearbyHotels(stationId,lat,lon){
+window.showStationNearbyHotels=async function(stationId,lat,lon){
   const box=document.getElementById(`stationNearbyHotels-${Number(stationId)}`);
   if(!box)return;
 
@@ -2324,9 +2326,10 @@ async function showStationNearbyHotels(stationId,lat,lon){
       </div>`;
     }).join('');
   }catch(e){
+    console.error('station nearby hotels',e);
     box.innerHTML='<div style="font-size:10px;color:#a34b3e;padding:7px 0">宿泊施設を読み込めませんでした。もう一度お試しください。</div>';
   }
-}
+};
 
 function hotelPopup(h){
   const u=rakutenAffiliateUrl(h);
@@ -2398,6 +2401,24 @@ const raw=[...(Array.isArray(data1)?data1:[]),...(Array.isArray(data2)?data2:[])
     return HOTEL_MASTER;
   }
 }
+
+
+/* iPhone Safari / Leafletポップアップ用のタップ補強 */
+document.addEventListener('click',function(e){
+  const b=e.target && e.target.closest ? e.target.closest('.station-hotel-affiliate-btn') : null;
+  if(!b)return;
+  e.preventDefault();
+  e.stopPropagation();
+  const stationId=Number(b.dataset.stationId);
+  const lat=Number(b.dataset.lat);
+  const lon=Number(b.dataset.lon);
+  window.showStationNearbyHotels(stationId,lat,lon);
+},true);
+
+/* ボタンを押した時に待たせないよう、起動後に宿泊施設マスタを先読み */
+setTimeout(()=>{
+  loadNationwideHotelMaster().catch(()=>{});
+},1800);
 
 function hotelLimitForZoom(z){
   if(z<=5) return 0;     // 全国表示では宿ピンを出さない
