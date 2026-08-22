@@ -1240,6 +1240,22 @@ button:active{filter:brightness(.97)}
 .facility-cluster-bubble.restaurant{background:linear-gradient(145deg,#db7b50,#b64e2d)!important}
 .facility-cluster-bubble.tourism{background:linear-gradient(145deg,#a56eb5,#7c4390)!important}
 
+
+/* ===== 現地写真（写真データがある施設だけ表示） ===== */
+.facility-popup-photo{
+  display:block!important;
+  width:100%!important;
+  height:126px!important;
+  object-fit:cover!important;
+  border-radius:12px!important;
+  margin:0 0 8px!important;
+  background:#eef1e7!important;
+  box-shadow:0 3px 10px rgba(48,67,43,.10)!important;
+}
+@media (max-width:390px){
+  .facility-popup-photo{height:112px!important}
+}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1436,6 +1452,24 @@ async function loadStationWeather(id,lat,lon,force=false){
   }
 }
 
+
+function facilityPhotoUrl(o){
+  if(!o)return '';
+  const v =
+    o.photo || o.photoUrl || o.photo_url ||
+    o.image || o.imageUrl || o.image_url ||
+    o.picture || o.pictureUrl || o.picture_url ||
+    o.hotelImageUrl || o.hotelImageURL ||
+    o.thumbnail || o.thumbnailUrl || o.thumbnail_url ||
+    '';
+  return typeof v==='string' ? v.trim() : '';
+}
+function facilityPhotoHtml(o,alt){
+  const u=facilityPhotoUrl(o);
+  if(!u)return '';
+  return `<img class="facility-popup-photo" src="${esc(u)}" alt="${esc(alt||'現地写真')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
+}
+
 function popup(s,lat,lon){
   const officialSearch = encodeURIComponent(`道の駅${s.name} 公式サイト`);
 const homepage = `<a class="popup-homepage" href="https://www.google.com/search?q=${officialSearch}" target="_blank" rel="noopener">🔎 公式サイト検索</a>`;
@@ -1450,6 +1484,7 @@ const homepage = `<a class="popup-homepage" href="https://www.google.com/search?
 
   return `
     <div class="station-popup">
+      ${facilityPhotoHtml(s,`道の駅 ${s.name}`)}
       <div class="popup-name">${esc(s.name)}</div>
       <div class="popup-meta">${esc(s.pref)} ${esc(s.loc||'')}</div>
       ${s.approx?'<div class="popup-reg">※ピン位置は概略です</div>':''}
@@ -1706,6 +1741,7 @@ function tourismPopup(s){
   const q=encodeURIComponent(`${s.name} ${s.pref}`);
   const lat=Number(s.lat),lon=Number(s.lon);
   return `<div class="tourism-popup">
+    ${facilityPhotoHtml(s,s.name)}
     <div class="tourism-popup-name">📷 ${esc(s.name)}</div>
     <div class="tourism-popup-meta">📍 ${esc(s.pref)}<br>🏷️ ${esc(s.cat||'観光地・観光施設')}</div>
     <a class="tourism-link" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">🔎 詳細・公式情報を調べる</a>
@@ -1758,7 +1794,8 @@ function normalizeTourismRow(r){
     lat,lon,
     website:r.website||r.url||'',
     wikipedia:r.wikipedia||'',
-    openingHours:r.openingHours||r.opening_hours||''
+    openingHours:r.openingHours||r.opening_hours||'',
+    photo:r.photo||r.photoUrl||r.photo_url||r.image||r.imageUrl||r.image_url||r.picture||r.pictureUrl||r.thumbnail||r.thumbnailUrl||''
   };
 }
 
@@ -2056,6 +2093,7 @@ function getRakutenId(){ return localStorage.getItem('rakutenApplicationId') || 
 function hotelPopup(h){
   const u=h.hotelInformationUrl || h.planListUrl || '';
   return `<div class="hotel-popup">
+    ${facilityPhotoHtml(h,h.name||'宿泊施設')}
     <div style="font-weight:900;font-size:16px;color:#355b88">🏨 ${esc(h.name||'宿泊施設')}</div>
     <div style="font-size:12px;color:#666;margin-top:4px">${esc(h.address||'')}</div>
     ${u?`<a href="${esc(u)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;padding:9px;border-radius:10px;background:#496e9f;color:#fff;text-align:center;text-decoration:none;font-weight:900">楽天トラベルで詳細・予約</a>`:''}
@@ -2075,7 +2113,8 @@ function normalizeRakutenHotels(data){
       address:`${basic.address1||''}${basic.address2||''}`,
       lat,lon,
       hotelInformationUrl:basic.hotelInformationUrl,
-      planListUrl:basic.planListUrl
+      planListUrl:basic.planListUrl,
+      hotelImageUrl:basic.hotelImageUrl||basic.hotelImageURL||basic.roomImageUrl||basic.imageUrl||''
     });
   }
   return out;
@@ -2200,6 +2239,7 @@ const distanceHtml=Number.isFinite(distance)
   ? `<br>📏 現在地から約 ${distance.toFixed(1)} km`
   : '';
   return `<div class="hotel-popup">
+    ${facilityPhotoHtml(h,h.name||'宿泊施設')}
     <div style="font-weight:900;font-size:16px;color:#355b88">🏨 ${esc(h.name||'宿泊施設')}</div>
     <div style="font-size:12px;color:#666;margin-top:4px">${esc(h.address||'')}${tel}${price}${review}${distanceHtml}
     <div class="hotel-actions">
