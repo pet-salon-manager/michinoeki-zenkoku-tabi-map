@@ -2226,13 +2226,32 @@ function renderRestaurantsForViewport(){
 }
 function getRakutenId(){ return localStorage.getItem('rakutenApplicationId') || ''; }
 
+/* 楽天トラベル アフィリエイト導線
+   hotels-1.json / hotels-2.json 内の hb.afl.rakuten.co.jp URLだけを予約リンクとして利用します。 */
+function rakutenAffiliateUrl(h){
+  const candidates=[h?.planListUrl,h?.hotelInformationUrl].filter(Boolean);
+  return candidates.find(u=>/^https:\/\/hb\.afl\.rakuten\.co\.jp\//i.test(String(u))) || '';
+}
+function recordRakutenClick(h){
+  try{
+    const key='rakutenTravelAffiliateClicksV1';
+    const rows=JSON.parse(localStorage.getItem(key)||'[]');
+    rows.push({
+      hotel:String(h?.name||''),
+      at:new Date().toISOString()
+    });
+    if(rows.length>100)rows.splice(0,rows.length-100);
+    localStorage.setItem(key,JSON.stringify(rows));
+  }catch(e){}
+}
+
 function hotelPopup(h){
-  const u=h.hotelInformationUrl || h.planListUrl || '';
+  const u=rakutenAffiliateUrl(h);
   return `<div class="hotel-popup">
     ${facilityPhotoHtml(h,h.name||'宿泊施設')}
     <div style="font-weight:900;font-size:16px;color:#355b88">🏨 ${esc(h.name||'宿泊施設')}</div>
     <div style="font-size:12px;color:#666;margin-top:4px">${esc(h.address||'')}</div>
-    ${u?`<a href="${esc(u)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;padding:9px;border-radius:10px;background:#496e9f;color:#fff;text-align:center;text-decoration:none;font-weight:900">楽天トラベルで詳細・予約</a>`:''}
+    ${u?`<a href="${esc(u)}" target="_blank" rel="sponsored noopener noreferrer" onclick="recordRakutenClick(h)" style="display:block;margin-top:9px;padding:9px;border-radius:10px;background:#496e9f;color:#fff;text-align:center;text-decoration:none;font-weight:900">楽天トラベルで詳細・予約</a><div style="font-size:9px;color:#8a7b70;text-align:center;margin-top:3px">PR：楽天アフィリエイトを利用しています</div>`:''}
   </div>`;
 }
 
@@ -2353,7 +2372,7 @@ function haversineKm(lat1, lon1, lat2, lon2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 function hotelPopup(h){
-  const u=h.hotelInformationUrl || h.planListUrl || '';
+  const u=rakutenAffiliateUrl(h);
   const price=h.hotelMinCharge!=null?`<br>料金目安：¥${Number(h.hotelMinCharge).toLocaleString('ja-JP')}〜`:'';
   const review=h.reviewAverage!=null&&Number(h.reviewAverage)>0?`<br>楽天評価：${Number(h.reviewAverage).toFixed(2)}`:'';
   const tel=h.telephoneNo?`<br>☎ ${esc(h.telephoneNo)}`:'';
@@ -2383,9 +2402,11 @@ const distanceHtml=Number.isFinite(distance)
   <a class="hotel-book"
      href="${esc(u)}"
      target="_blank"
-     rel="noopener">
+     rel="sponsored noopener noreferrer"
+     onclick="recordRakutenClick(h)">
     🏨 楽天トラベルで予約する
   </a>
+  <div style="font-size:9px;color:#8a7b70;text-align:center;margin-top:3px">PR：楽天アフィリエイトを利用しています</div>
 ` : ''}
       <a class="hotel-route" href="https://www.google.com/maps/search/?api=1&query=${mapQ}" target="_blank" rel="noopener">Googleマップで見る</a>
     </div>
