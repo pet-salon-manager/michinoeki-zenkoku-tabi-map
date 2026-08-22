@@ -1745,20 +1745,14 @@ let restaurantVisible=false;
 let restaurantRenderTimer=null;
 let RESTAURANT_MASTER=[];
 
-/* Hot Pepper グルメ：保存済みJSON版 */
-const HOTPEPPER_JSON_URLS=[
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-1.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-2.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-3.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-4.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-5.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-6.json',
-  'https://pet-salon-manager.github.io/hotpepper-builder.html/hotpepper-7.json'
-];
+/* Hot Pepper グルメ */
+const HOTPEPPER_PROXY_URL='https://hotpepper-proxy.sinntyoukoukichild.workers.dev/';
 let HOTPEPPER_ROWS=[];
-let hotpepperStaticReady=false;
-let hotpepperStaticLoading=false;
-let hotpepperStaticError='';
+let hotpepperFetchTimer=null;
+let hotpepperRequestSeq=0;
+let hotpepperLastKey='';
+let hotpepperLastFetchedAt=0;
+let hotpepperLastError='';
 
 const tourismLayer=L.layerGroup().addTo(map);
 let tourismVisible=false;
@@ -2075,22 +2069,29 @@ function restaurantPopup(r){
     ${routeHtml}
   </div>`;
 }
-function normalizeHotpepperStaticShop(s){
-  const lat=Number(s?.lat),lon=Number(s?.lon ?? s?.lng);
+function hotpepperRangeForZoom(z){
+  if(z>=16)return 1; // 300m
+  if(z===15)return 2; // 500m
+  if(z===14)return 3; // 1km
+  if(z===13)return 4; // 2km
+  return 5;          // 3km
+}
+function normalizeHotpepperShop(s){
+  const lat=Number(s?.lat),lon=Number(s?.lng);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
   return {
     id:String(s?.id||''),
     name:String(s?.name||'飲食店'),
-    type:String(s?.type||s?.genre||'restaurant'),
-    genre:String(s?.genre||s?.type||''),
+    type:String(s?.genre?.name||'restaurant'),
+    genre:String(s?.genre?.name||''),
     address:String(s?.address||''),
-    openingHours:String(s?.openingHours||s?.open||''),
-    phone:String(s?.phone||''),
-    website:String(s?.website||''),
-    hotpepperUrl:String(s?.hotpepperUrl||s?.urls?.pc||''),
-    photo:String(s?.photo||''),
-    budget:String(s?.budget||''),
-    access:String(s?.access||''),
+    openingHours:String(s?.open||''),
+    phone:'',
+    website:'',
+    hotpepperUrl:String(s?.urls?.pc||''),
+    photo:String(s?.photo?.pc?.l||s?.photo?.pc?.m||s?.photo?.mobile?.l||''),
+    budget:String(s?.budget?.average||s?.budget?.name||''),
+    access:String(s?.mobile_access||s?.access||''),
     lat,lon,
     source:'hotpepper'
   };
@@ -2103,6 +2104,7 @@ function mergedRestaurantRowsForBounds(b){
   const local=RESTAURANT_MASTER.filter(r=>b.contains([r.lat,r.lon]));
   const out=[],seen=new Set();
 
+  // Hot Pepperを優先して入れる
   for(const r of hp){
     const k=simpleRestaurantKey(r);
     if(!seen.has(k)){seen.add(k);out.push(r)}
@@ -2113,53 +2115,53 @@ function mergedRestaurantRowsForBounds(b){
   }
   return out;
 }
-async function loadHotpepperStatic(){
-  if(hotpepperStaticReady||hotpepperStaticLoading)return;
-  hotpepperStaticLoading=true;
-  hotpepperStaticError='';
+async function fetchHotpepperForViewport(force=false){
+  if(!restaurantVisible)return;
+  const z=map.getZoom();
+  if(z<10){
+    hotpepperLastError='地図をもう少し拡大するとHot Pepper店舗を取得します';
+    return;
+  }
+  const c=map.getCenter();
+  const range=hotpepperRangeForZoom(z);
+  const key=`${c.lat.toFixed(3)},${c.lng.toFixed(3)},${range}`;
+  const now=Date.now();
+  if(!force && key===hotpepperLastKey && now-hotpepperLastFetchedAt<180000)return;
+
+  const seq=++hotpepperRequestSeq;
+  hotpepperLastError='';
   try{
-    const results=await Promise.all(HOTPEPPER_JSON_URLS.map(async url=>{
-      const r=await fetch(url,{cache:'force-cache'});
-      if(!r.ok)throw new Error(`${url.split('/').pop()} HTTP ${r.status}`);
-      const data=await r.json();
-      return Array.isArray(data)?data:[];
-    }));
+    const u=new URL(HOTPEPPER_PROXY_URL);
+    u.searchParams.set('lat',c.lat.toFixed(6));
+    u.searchParams.set('lng',c.lng.toFixed(6));
+    u.searchParams.set('range',String(range));
+    u.searchParams.set('count','100');
 
-    const merged=[],seen=new Set();
-    for(const arr of results){
-      for(const raw of arr){
-        const row=normalizeHotpepperStaticShop(raw);
-        if(!row)continue;
-        const key=row.id||simpleRestaurantKey(row);
-        if(seen.has(key))continue;
-        seen.add(key);
-        merged.push(row);
-      }
-    }
+    const r=await fetch(u.toString(),{cache:'no-store'});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const data=await r.json();
+    if(seq!==hotpepperRequestSeq)return;
 
-    HOTPEPPER_ROWS=merged;
-    hotpepperStaticReady=true;
-    hotpepperStaticError='';
-    if(restaurantVisible)renderRestaurantsForViewport();
+    const shops=Array.isArray(data?.results?.shop)?data.results.shop:[];
+    HOTPEPPER_ROWS=shops.map(normalizeHotpepperShop).filter(Boolean);
+    hotpepperLastKey=key;
+    hotpepperLastFetchedAt=Date.now();
+    hotpepperLastError='';
   }catch(e){
-    hotpepperStaticError='保存済みHot Pepper JSONを読み込めませんでした';
-    console.error(e);
-  }finally{
-    hotpepperStaticLoading=false;
+    if(seq!==hotpepperRequestSeq)return;
+    hotpepperLastError='Hot Pepperの店舗情報を取得できませんでした';
   }
 }
-async function refreshRestaurantsForViewport(){
+async function refreshRestaurantsForViewport(forceHotpepper=false){
   await loadRestaurantMaster();
-  if(!hotpepperStaticReady&&!hotpepperStaticLoading)await loadHotpepperStatic();
+  await fetchHotpepperForViewport(forceHotpepper);
   renderRestaurantsForViewport();
 }
 function scheduleRestaurantRender(){
   clearTimeout(restaurantRenderTimer);
-  restaurantRenderTimer=setTimeout(()=>renderRestaurantsForViewport(),180);
+  clearTimeout(hotpepperFetchTimer);
+  hotpepperFetchTimer=setTimeout(()=>refreshRestaurantsForViewport(false),650);
 }
-
-/* 飲食店ONを待たず、ページ起動後に保存済みJSONを先読み */
-setTimeout(()=>loadHotpepperStatic(),900);
 async function loadRestaurantMaster(){
   if(restaurantMasterReady || restaurantMasterError) return;
   try{
@@ -2215,9 +2217,9 @@ function renderRestaurantsForViewport(){
   );
 
   if(map.getZoom()<10 && hpCount===0){
-    setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件表示`,1900);
-  }else if(hotpepperStaticError && hpCount===0){
-    setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件表示　${hotpepperStaticError}`,2200);
+    setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件表示　※地図を拡大するとHot Pepper店舗を取得`,1900);
+  }else if(hotpepperLastError && hpCount===0){
+    setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件表示　${hotpepperLastError}`,2200);
   }else{
     setStatus(`🍴 飲食店 ${rows.length.toLocaleString('ja-JP')}件 / ${objects.toLocaleString('ja-JP')}表示（Hot Pepper ${hpCount}件＋既存 ${localCount}件）`,1700);
   }
@@ -2887,14 +2889,12 @@ restaurantToggle?.addEventListener('change',()=>{
   restaurantToggleState.textContent=restaurantVisible?'ON':'OFF';
   if(globalSearchActive){runGlobalMapSearch(search.value);return;}
   if(restaurantVisible){
-    if(hotpepperStaticReady){
-      renderRestaurantsForViewport();
-    }else{
-      setStatus('🍴 保存済み飲食店データを読み込んでいます…',1600);
-      refreshRestaurantsForViewport();
-    }
+    setStatus('🍴 Hot Pepper グルメから飲食店を取得しています…',1500);
+    refreshRestaurantsForViewport(true);
   }else{
     clearTimeout(restaurantRenderTimer);
+    clearTimeout(hotpepperFetchTimer);
+    hotpepperRequestSeq++;
     restaurantLayer.clearLayers();
     setStatus('飲食店を非表示にしました',1400);
   }
