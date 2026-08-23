@@ -1439,6 +1439,20 @@ body.map-subpage-active #mapBackToHomeBtn{display:block}
 }
 body.map-subpage-active #mapBackToHomeBtn{display:block!important}
 
+
+/* ===== ホーム道の駅一覧：5件ずつ表示 ===== */
+.station-home-pager{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  margin:12px 0 4px;
+}
+.station-home-pager button{
+  border:1px solid #cfd8c9;background:#fff;color:#49654d;
+  border-radius:10px;padding:9px 12px;font-size:11px;font-weight:900;
+  touch-action:manipulation;
+}
+.station-home-pager button:disabled{opacity:.35}
+.station-home-pageinfo{font-size:11px;color:#6f776d;font-weight:800}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1495,6 +1509,11 @@ body.map-subpage-active #mapBackToHomeBtn{display:block!important}
     <table class="station-list-table">
       <tbody id="stationHomeList"></tbody>
     </table>
+    <div class="station-home-pager">
+      <button id="stationPrevPageBtn" type="button">← 前の5件</button>
+      <div id="stationHomePageInfo" class="station-home-pageinfo">1 / 1</div>
+      <button id="stationNextPageBtn" type="button">次の5件 →</button>
+    </div>
   </div>
 </div>
 <button id="mapBackToHomeBtn" type="button">← ホームに戻る</button>
@@ -3341,6 +3360,8 @@ function showTopMenu(){
 
 /* ===== 新ホーム：道の駅一覧 / 地図サブページ ===== */
 let __stationHomeNearestMode=false;
+let __stationHomePage=1;
+const __stationHomePageSize=5;
 
 function __stationHomeText(v){
   return String(v||'').toLowerCase().replace(/\s+/g,'').replace(/　/g,'');
@@ -3358,6 +3379,9 @@ function __stationHomeRows(){
 function renderStationHomeList(){
   const tbody=document.getElementById('stationHomeList');
   const countEl=document.getElementById('stationHomeCount');
+  const pageInfo=document.getElementById('stationHomePageInfo');
+  const prevBtn=document.getElementById('stationPrevPageBtn');
+  const nextBtn=document.getElementById('stationNextPageBtn');
   const input=document.getElementById('stationHomeSearchInput');
   if(!tbody||!countEl||!input)return;
 
@@ -3376,9 +3400,17 @@ function renderStationHomeList(){
     rows.sort((a,b)=>(a.pref+a.loc+a.name).localeCompare(b.pref+b.loc+b.name,'ja'));
   }
 
-  countEl.textContent=`${rows.length.toLocaleString('ja-JP')}件の道の駅`;
+  const totalPages=Math.max(1,Math.ceil(rows.length/__stationHomePageSize));
+  __stationHomePage=Math.min(Math.max(1,__stationHomePage),totalPages);
+  const startIndex=(__stationHomePage-1)*__stationHomePageSize;
+  const pageRows=rows.slice(startIndex,startIndex+__stationHomePageSize);
 
-  tbody.innerHTML=rows.map(s=>`
+  countEl.textContent=`${rows.length.toLocaleString('ja-JP')}件の道の駅`;
+  if(pageInfo)pageInfo.textContent=`${__stationHomePage} / ${totalPages}`;
+  if(prevBtn)prevBtn.disabled=__stationHomePage<=1;
+  if(nextBtn)nextBtn.disabled=__stationHomePage>=totalPages;
+
+  tbody.innerHTML=pageRows.map(s=>`
     <tr>
       <td class="station-list-main">
         <div class="station-list-name">📍 ${esc(s.name)}</div>
@@ -3392,7 +3424,6 @@ function renderStationHomeList(){
     </tr>
   `).join('');
 }
-
 function showStationHome(){
   document.getElementById('stationHomeView')?.classList.remove('is-hidden');
   document.body.classList.remove('map-subpage-active');
@@ -3424,21 +3455,50 @@ window.openStationFromHome=function(lat,lon){
 
 
 document.getElementById('mapBackToHomeBtn')?.addEventListener('click',showStationHome);
-document.getElementById('stationHomeSearchInput')?.addEventListener('input',renderStationHomeList);
+document.getElementById('stationHomeSearchInput')?.addEventListener('input',()=>{
+  __stationHomePage=1;
+  renderStationHomeList();
+});
 document.getElementById('stationHomeCurrentBtn')?.addEventListener('click',()=>{
   __stationHomeNearestMode=true;
-  if(Array.isArray(window.__currentPos)){
+  __stationHomePage=1;
+
+  const done=()=>{
     renderStationHomeList();
+    const b=document.getElementById('stationHomeCurrentBtn');
+    if(b)b.textContent='📍 現在地から近い順';
+  };
+
+  if(Array.isArray(window.__currentPos) && window.__currentPos.length>=2){
+    done();
     return;
   }
   try{
     navigator.geolocation.getCurrentPosition(pos=>{
       window.__currentPos=[pos.coords.latitude,pos.coords.longitude];
+      done();
+    },()=>{
+      const b=document.getElementById('stationHomeCurrentBtn');
+      if(b)b.textContent='📍 現在地を取得できません';
       renderStationHomeList();
-    },()=>renderStationHomeList(),{
-      enableHighAccuracy:true,timeout:8000,maximumAge:60000
+    },{
+      enableHighAccuracy:true,timeout:10000,maximumAge:60000
     });
-  }catch(e){renderStationHomeList()}
+  }catch(e){
+    renderStationHomeList();
+  }
+});
+
+
+document.getElementById('stationPrevPageBtn')?.addEventListener('click',()=>{
+  if(__stationHomePage>1){
+    __stationHomePage--;
+    renderStationHomeList();
+  }
+});
+document.getElementById('stationNextPageBtn')?.addEventListener('click',()=>{
+  __stationHomePage++;
+  renderStationHomeList();
 });
 
 /* 起動時は必ず道の駅一覧ホームを表示 */
