@@ -1376,6 +1376,22 @@ button:active{filter:brightness(.97)}
   font-size:11px;font-weight:900;
 }
 
+
+/* ===== 農産物直売所 詳細表示強化 ===== */
+.farm-popup{min-width:240px;max-width:300px}
+.farm-popup-name{
+  font-size:15px!important;font-weight:950!important;color:#45613d!important;
+  line-height:1.35!important;margin-bottom:7px!important
+}
+.farm-popup-type{
+  display:inline-block;margin:0 0 6px;padding:3px 7px;border-radius:999px;
+  background:#eef5e8;color:#527047;font-size:9px;font-weight:900
+}
+.farm-popup-detail{
+  margin-top:6px;padding:7px 8px;border-radius:10px;background:#f8f5eb;
+  font-size:10px;line-height:1.55;color:#665f54
+}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1702,14 +1718,24 @@ function farmStandIcon(){
 }
 function farmStandPopup(f){
   const q=encodeURIComponent(`${f.name||'農産物直売所'} ${f.address||''}`);
+  const detail=[
+    f.operator?`運営：${esc(f.operator)}`:'',
+    f.description?esc(f.description):'',
+    f.products?`取扱品：${esc(f.products)}`:'',
+    f.payment?`支払い：${esc(f.payment)}`:'',
+    f.wheelchair?`バリアフリー：${esc(f.wheelchair)}`:''
+  ].filter(Boolean).join('<br>');
+  const website=f.website?`<a class="farm-popup-link" href="${esc(f.website)}" target="_blank" rel="noopener">公式サイトを見る</a>`:'';
   return `<div class="farm-popup">
     <div class="farm-popup-name">🥬 ${esc(f.name||'農産物直売所')}</div>
+    <div class="farm-popup-type">${esc(f.typeLabel||'農産物直売所')}</div>
     <div class="farm-popup-meta">
       ${f.address?`📍 ${esc(f.address)}<br>`:''}
       ${f.phone?`☎ ${esc(f.phone)}<br>`:''}
       ${f.openingHours?`🕐 ${esc(f.openingHours)}<br>`:''}
-      ${f.products?`🧺 ${esc(f.products)}<br>`:''}
     </div>
+    ${detail?`<div class="farm-popup-detail">${detail}</div>`:''}
+    ${website}
     <a class="farm-popup-link" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Googleマップで見る</a>
   </div>`;
 }
@@ -1718,22 +1744,60 @@ function normalizeFarmStand(el){
   const lat=Number(el.lat ?? el.center?.lat);
   const lon=Number(el.lon ?? el.center?.lon);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+
+  const typeLabel =
+    t.shop==='farm' ? '農産物直売所' :
+    t.amenity==='marketplace' ? '市場・直売所' :
+    t.shop==='greengrocer' ? '青果・農産物店' :
+    t.vending==='farm_products' ? '農産物販売所' :
+    t.produce ? '地元農産物販売所' : '農産物直売所';
+
+  // Name priority: official name -> Japanese name -> operator/brand -> descriptive fallback.
+  const name =
+    t.name ||
+    t['name:ja'] ||
+    t.official_name ||
+    t.brand ||
+    t.operator ||
+    (t.farm ? `${t.farm} 直売所` : '') ||
+    (t['addr:city'] ? `${t['addr:city']} 農産物直売所` : typeLabel);
+
   const address=[
     t['addr:province']||t['addr:state']||'',
     t['addr:city']||'',
+    t['addr:district']||'',
     t['addr:suburb']||'',
     t['addr:quarter']||'',
     t['addr:street']||'',
     t['addr:housenumber']||''
   ].filter(Boolean).join(' ');
+
+  const productParts=[
+    t.produce,
+    t.product,
+    t['product:organic']==='yes'?'有機農産物':'',
+    t.organic==='only'?'有機商品':'',
+    t.crop
+  ].filter(Boolean);
+
+  const paymentParts=[];
+  if(t['payment:cash']==='yes')paymentParts.push('現金');
+  if(t['payment:credit_cards']==='yes')paymentParts.push('クレジットカード');
+  if(t['payment:electronic_purses']==='yes')paymentParts.push('電子マネー');
+
   return {
     id:`${el.type||'node'}-${el.id}`,
-    name:t.name||t['name:ja']||t.operator||'農産物直売所',
+    name:String(name),
+    typeLabel,
     lat,lon,address,
     phone:t.phone||t['contact:phone']||'',
     openingHours:t.opening_hours||'',
-    products:t.produce||t.product||'',
-    website:t.website||t['contact:website']||''
+    products:productParts.join('・'),
+    operator:t.operator||'',
+    description:t.description||t.note||'',
+    payment:paymentParts.join('・'),
+    wheelchair:t.wheelchair==='yes'?'対応':t.wheelchair==='limited'?'一部対応':'',
+    website:t.website||t['contact:website']||t.url||''
   };
 }
 function farmStandBoundsKey(){
@@ -1744,7 +1808,7 @@ function farmStandBoundsKey(){
 async function fetchFarmStandsForViewport(force=false){
   const m=window.__stationMap;if(!m)return;
   const z=m.getZoom();
-  if(z<8){window.__farmStandLayer?.clearLayers();return;}
+  if(z<7){window.__farmStandLayer?.clearLayers();return;}
   const key=farmStandBoundsKey();
   if(!force && key===farmStandLastKey)return;
   const seq=++farmStandRequestSeq;
@@ -1752,13 +1816,16 @@ async function fetchFarmStandsForViewport(force=false){
   const b=m.getBounds().pad(0.25);
   const south=b.getSouth(),west=b.getWest(),north=b.getNorth(),east=b.getEast();
 
-  const query=`[out:json][timeout:20];
+  const query=`[out:json][timeout:28];
   (
-    node["shop"="farm"](${south},${west},${north},${east});
-    way["shop"="farm"](${south},${west},${north},${east});
-    relation["shop"="farm"](${south},${west},${north},${east});
-    node["amenity"="marketplace"]["produce"~"farm|local|vegetable|fruit",i](${south},${west},${north},${east});
-    way["amenity"="marketplace"]["produce"~"farm|local|vegetable|fruit",i](${south},${west},${north},${east});
+    nwr["shop"="farm"](${south},${west},${north},${east});
+    nwr["amenity"="marketplace"]["produce"](${south},${west},${north},${east});
+    nwr["amenity"="marketplace"]["product"~"vegetable|fruit|farm|local|produce",i](${south},${west},${north},${east});
+    nwr["shop"="greengrocer"]["produce"~"local|farm|yes",i](${south},${west},${north},${east});
+    nwr["vending"="farm_products"](${south},${west},${north},${east});
+    nwr["vending"~"milk|eggs|vegetables|fruit|potatoes|honey",i]["operator"](${south},${west},${north},${east});
+    nwr["produce"~"vegetable|fruit|farm|local|rice|eggs|milk|honey",i](${south},${west},${north},${east});
+    nwr["name"~"直売所|産直|農産物|ファーマーズマーケット|朝市|青空市|JA.*直売|道の駅.*直売",i](${south},${west},${north},${east});
   );
   out center tags;`;
 
@@ -1771,7 +1838,18 @@ async function fetchFarmStandsForViewport(force=false){
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const data=await r.json();
     if(seq!==farmStandRequestSeq)return;
-    FARM_STANDS=(data.elements||[]).map(normalizeFarmStand).filter(Boolean);
+    {
+      const seen=new Set();
+      FARM_STANDS=(data.elements||[])
+        .map(normalizeFarmStand)
+        .filter(Boolean)
+        .filter(f=>{
+          const key=`${f.name}|${f.lat.toFixed(5)}|${f.lon.toFixed(5)}`;
+          if(seen.has(key))return false;
+          seen.add(key);
+          return true;
+        });
+    }
     farmStandLastKey=key;
     renderFarmStands();
   }catch(e){
@@ -1783,7 +1861,7 @@ function renderFarmStands(){
   const farmLayer=window.__farmStandLayer;
   if(!m||!farmLayer)return;
   farmLayer.clearLayers();
-  if(m.getZoom()<8)return;
+  if(m.getZoom()<7)return;
   const b=m.getBounds().pad(0.05);
   const rows=FARM_STANDS.filter(f=>b.contains([f.lat,f.lon]));
   for(const f of rows){
