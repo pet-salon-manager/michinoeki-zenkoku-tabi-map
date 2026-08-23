@@ -1384,6 +1384,61 @@ body.map-subpage-active #mapBackToHomeBtn{display:block}
   .station-list-mapbtn{min-width:70px;font-size:10px}
 }
 
+
+/* ===== ホーム上部を地図ページと同一デザインに ===== */
+#stationHomeView{
+  position:fixed!important;inset:0!important;z-index:99990!important;
+  background:linear-gradient(180deg,#f7f4e9 0%,#eef3e7 100%)!important;
+  overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;
+}
+#stationHomeView.is-hidden{display:none!important}
+#stationHomeTop{
+  position:relative!important;
+  top:auto!important;
+  z-index:5!important;
+  margin:0!important;
+}
+#stationHomeView .station-home-shell{
+  max-width:820px!important;
+  margin:0 auto!important;
+  padding:12px 12px calc(42px + env(safe-area-inset-bottom))!important;
+}
+#stationHomeView .station-home-header{display:none!important}
+.station-list-heading{
+  display:flex;align-items:end;justify-content:space-between;gap:10px;
+  padding:3px 3px 5px;
+}
+.station-list-heading-title{
+  font-size:16px;font-weight:950;color:#3d6545;
+}
+#stationHomeView .station-home-count{
+  margin:0!important;font-size:11px!important;color:#747c70!important;white-space:nowrap;
+}
+.station-home-bottom{
+  padding:12px 0 6px;
+}
+.station-map-search-bottom-btn{
+  display:block;width:100%;min-height:52px;border:0;border-radius:15px;
+  background:linear-gradient(135deg,#5f8d59,#3f7049);color:#fff;
+  font-size:15px;font-weight:950;box-shadow:0 5px 15px rgba(55,95,61,.18);
+  touch-action:manipulation;
+}
+.station-map-search-bottom-btn:active{transform:scale(.99)}
+#mapBackToHomeBtn{
+  position:fixed!important;
+  z-index:99980!important;
+  left:12px!important;
+  top:calc(env(safe-area-inset-top,0px) + 10px)!important;
+  display:none;
+  border:0!important;border-radius:999px!important;
+  padding:11px 14px!important;
+  background:rgba(255,253,247,.97)!important;
+  color:#3d6545!important;font-size:12px!important;font-weight:950!important;
+  box-shadow:0 5px 16px rgba(44,60,42,.22)!important;
+  touch-action:manipulation!important;
+}
+body.map-subpage-active #mapBackToHomeBtn{display:block!important}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1398,24 +1453,55 @@ body.map-subpage-active #mapBackToHomeBtn{display:block}
 <body>
 
 <div id="stationHomeView">
+  <header id="stationHomeTop">
+    <div class="top">
+      <div class="brand">
+        <div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ">
+          <img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+        <div class="title-wrap">
+          <h1>
+            <span class="app-title-line app-title-station">🌽 道の駅</span>
+            <span class="app-title-line app-title-map">全国旅マップ 🚃</span>
+          </h1>
+          <div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div>
+        </div>
+      </div>
+      <div class="badge">国交省 1,231駅</div>
+    </div>
+    <div class="toolbar">
+      <div class="top-search-row">
+        <div class="search">
+          <input id="stationHomeSearchInput" type="search" placeholder="施設名・種類・地域・メモを検索" autocomplete="off">
+        </div>
+        <div class="top-social-stack">
+          <button type="button" id="stationHomeCurrentBtn" class="jump-current-btn" aria-label="現在地から近い道の駅を表示">📍 現在地</button>
+          <div class="top-social-buttons" aria-label="道の駅をSNSで検索">
+            <a class="top-social-btn x" href="https://x.com/search?q=%E9%81%93%E3%81%AE%E9%A7%85&src=typed_query" target="_blank" rel="noopener" aria-label="Xで道の駅を検索">𝕏</a>
+            <a class="top-social-btn fb" href="https://www.facebook.com/search/top/?q=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="Facebookで道の駅を検索">f</a>
+            <a class="top-social-btn yt" href="https://www.youtube.com/results?search_query=%E9%81%93%E3%81%AE%E9%A7%85" target="_blank" rel="noopener" aria-label="YouTubeで道の駅を検索">▶</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
   <div class="station-home-shell">
-    <div class="station-home-header">
-      <div class="station-home-title">🌿 全国 道の駅検索</div>
-      <div class="station-home-sub">道の駅名・都道府県・市町村から検索できます</div>
-      <div class="station-home-search">
-        <span>🔎</span>
-        <input id="stationHomeSearchInput" type="search" placeholder="例：富士、静岡、草津">
-      </div>
-      <div class="station-home-tools">
-        <button id="stationOpenMapBtn" class="station-map-search-btn" type="button">🗺️ 地図から検索</button>
-        <button id="stationNearestBtn" class="station-nearest-btn" type="button">📍 現在地から近い順</button>
-      </div>
+    <div class="station-list-heading">
+      <div class="station-list-heading-title">全国の道の駅一覧</div>
       <div id="stationHomeCount" class="station-home-count">道の駅を読み込んでいます…</div>
     </div>
-    <table class="station-list-table"><tbody id="stationHomeList"></tbody></table>
+
+    <table class="station-list-table">
+      <tbody id="stationHomeList"></tbody>
+    </table>
+
+    <div class="station-home-bottom">
+      <button id="stationOpenMapBottomBtn" class="station-map-search-bottom-btn" type="button">🗺️ 地図から検索</button>
+    </div>
   </div>
 </div>
-<button id="mapBackToHomeBtn" type="button">← 道の駅一覧へ</button>
+<button id="mapBackToHomeBtn" type="button">← ホームに戻る</button>
 
 <div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
   <div class="search"><input id="searchInput" type="search" placeholder="施設名・種類・地域・メモを検索" autocomplete="off" /></div>
@@ -3340,10 +3426,10 @@ window.openStationFromHome=function(lat,lon){
   }catch(e){}
 };
 
-document.getElementById('stationOpenMapBtn')?.addEventListener('click',showMapSubpage);
+document.getElementById('stationOpenMapBottomBtn')?.addEventListener('click',showMapSubpage);
 document.getElementById('mapBackToHomeBtn')?.addEventListener('click',showStationHome);
 document.getElementById('stationHomeSearchInput')?.addEventListener('input',renderStationHomeList);
-document.getElementById('stationNearestBtn')?.addEventListener('click',()=>{
+document.getElementById('stationHomeCurrentBtn')?.addEventListener('click',()=>{
   __stationHomeNearestMode=true;
   if(Array.isArray(window.__currentPos)){
     renderStationHomeList();
