@@ -1737,17 +1737,19 @@ function normalizeFarmStand(el){
   };
 }
 function farmStandBoundsKey(){
-  const c=map.getCenter(),z=map.getZoom();
+  const m=window.__stationMap;if(!m)return '';
+  const c=m.getCenter(),z=m.getZoom();
   return `${c.lat.toFixed(2)},${c.lng.toFixed(2)},${z}`;
 }
 async function fetchFarmStandsForViewport(force=false){
-  const z=map.getZoom();
-  if(z<8){farmStandLayer.clearLayers();return;}
+  const m=window.__stationMap;if(!m)return;
+  const z=m.getZoom();
+  if(z<8){window.__farmStandLayer?.clearLayers();return;}
   const key=farmStandBoundsKey();
   if(!force && key===farmStandLastKey)return;
   const seq=++farmStandRequestSeq;
 
-  const b=map.getBounds().pad(0.25);
+  const b=m.getBounds().pad(0.25);
   const south=b.getSouth(),west=b.getWest(),north=b.getNorth(),east=b.getEast();
 
   const query=`[out:json][timeout:20];
@@ -1777,24 +1779,26 @@ async function fetchFarmStandsForViewport(force=false){
   }
 }
 function renderFarmStands(){
-  farmStandLayer.clearLayers();
-  if(map.getZoom()<8)return;
-  const b=map.getBounds().pad(0.05);
+  const m=window.__stationMap;
+  const farmLayer=window.__farmStandLayer;
+  if(!m||!farmLayer)return;
+  farmLayer.clearLayers();
+  if(m.getZoom()<8)return;
+  const b=m.getBounds().pad(0.05);
   const rows=FARM_STANDS.filter(f=>b.contains([f.lat,f.lon]));
   for(const f of rows){
     L.marker([f.lat,f.lon],{
       icon:farmStandIcon(),
       title:f.name||'農産物直売所',
       riseOnHover:true
-    }).bindPopup(farmStandPopup(f),{maxWidth:300}).addTo(farmStandLayer);
+    }).bindPopup(farmStandPopup(f),{maxWidth:300}).addTo(farmLayer);
   }
 }
 function scheduleFarmStands(){
   clearTimeout(farmStandFetchTimer);
   farmStandFetchTimer=setTimeout(()=>fetchFarmStandsForViewport(false),850);
 }
-map.on('moveend zoomend',scheduleFarmStands);
-setTimeout(()=>fetchFarmStandsForViewport(true),1200);
+
 
 
 function facilityPhotoUrl(o){
@@ -2078,6 +2082,16 @@ let hotelVisible=false;
 
 const restaurantLayer=L.layerGroup().addTo(map);
 const farmStandLayer=L.layerGroup().addTo(map);
+window.__farmStandLayer=farmStandLayer;
+
+setTimeout(()=>{
+  const m=window.__stationMap;
+  if(!m||window.__farmStandHooked)return;
+  window.__farmStandHooked=true;
+  m.on('moveend zoomend',scheduleFarmStands);
+  fetchFarmStandsForViewport(true);
+},1600);
+
 let restaurantVisible=false;
 let restaurantRenderTimer=null;
 let RESTAURANT_MASTER=[];
