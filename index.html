@@ -1495,10 +1495,6 @@ body.map-subpage-active #mapBackToHomeBtn{display:block!important}
     <table class="station-list-table">
       <tbody id="stationHomeList"></tbody>
     </table>
-
-    <div class="station-home-bottom">
-      <button id="stationOpenMapBottomBtn" class="station-map-search-bottom-btn" type="button">🗺️ 地図から検索</button>
-    </div>
   </div>
 </div>
 <button id="mapBackToHomeBtn" type="button">← ホームに戻る</button>
@@ -3426,7 +3422,7 @@ window.openStationFromHome=function(lat,lon){
   }catch(e){}
 };
 
-document.getElementById('stationOpenMapBottomBtn')?.addEventListener('click',showMapSubpage);
+
 document.getElementById('mapBackToHomeBtn')?.addEventListener('click',showStationHome);
 document.getElementById('stationHomeSearchInput')?.addEventListener('input',renderStationHomeList);
 document.getElementById('stationHomeCurrentBtn')?.addEventListener('click',()=>{
@@ -3450,6 +3446,55 @@ setTimeout(()=>{
   renderStationHomeList();
   showStationHome();
 },500);
+
+
+
+/* ===== ホーム時：下部ボタンを「地図から検索」に切替 ===== */
+function syncBottomActionForPage(){
+  const homeVisible=!document.getElementById('stationHomeView')?.classList.contains('is-hidden');
+  const candidates=[...document.querySelectorAll('button')];
+  const topToggle=candidates.find(b=>
+    (b.textContent||'').includes('上部のタイトル・検索欄を表示')
+  );
+  if(!topToggle)return;
+
+  if(homeVisible){
+    if(!topToggle.dataset.originalText){
+      topToggle.dataset.originalText=topToggle.textContent.trim();
+    }
+    topToggle.textContent='🗺️ 地図から検索';
+    topToggle.dataset.homeMapButton='1';
+    topToggle.style.display='';
+  }else{
+    if(topToggle.dataset.originalText){
+      topToggle.textContent=topToggle.dataset.originalText;
+    }
+    delete topToggle.dataset.homeMapButton;
+  }
+}
+
+document.addEventListener('click',function(e){
+  const b=e.target?.closest?.('button[data-home-map-button="1"]');
+  if(!b)return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  showMapSubpage();
+  setTimeout(syncBottomActionForPage,50);
+},true);
+
+const __oldShowStationHome=showStationHome;
+showStationHome=function(){
+  __oldShowStationHome();
+  setTimeout(syncBottomActionForPage,50);
+};
+
+const __oldShowMapSubpage=showMapSubpage;
+showMapSubpage=function(){
+  __oldShowMapSubpage();
+  setTimeout(syncBottomActionForPage,50);
+};
+
+setTimeout(syncBottomActionForPage,650);
 
 </script>
 
