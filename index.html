@@ -1360,6 +1360,22 @@ button:active{filter:brightness(.97)}
   border-radius:14px;color:#747b70;font-size:13px
 }
 
+
+/* ===== 農産物直売所 ===== */
+.farm-stand-pin{
+  width:34px;height:34px;border-radius:50% 50% 50% 8px;
+  transform:rotate(-45deg);background:#f2a83b;border:3px solid #fff;
+  box-shadow:0 3px 8px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;
+}
+.farm-stand-pin span{transform:rotate(45deg);font-size:17px;line-height:1}
+.farm-popup-name{font-size:14px;font-weight:950;color:#4f673c;margin-bottom:5px}
+.farm-popup-meta{font-size:10px;color:#746d62;line-height:1.5}
+.farm-popup-link{
+  display:block;margin-top:7px;padding:8px 9px;border-radius:10px;
+  background:#5c8451;color:#fff!important;text-align:center;text-decoration:none!important;
+  font-size:11px;font-weight:900;
+}
+
 </style>
 
 <meta name="theme-color" content="#315d3c">
@@ -1372,7 +1388,7 @@ button:active{filter:brightness(.97)}
 <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
-<div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
+<div class="app"><header id="appTop"><div class="top"><div class="brand"><div class="brandmark michi-brand" aria-label="道の駅 全国旅マップ"><img src="./icon-192.png" alt="道の駅 全国旅マップ" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="title-wrap"><h1><span class="app-title-line app-title-station">🌽 道の駅</span><span class="app-title-line app-title-map">全国旅マップ 🚃</span></h1><div class="sub">道の駅・農産物直売所・鉄道駅・宿泊施設・飲食店・観光地を地図で見つけよう！</div></div></div><div class="badge" id="countBadge">国交省 1,231駅</div></div><div class="toolbar"><div class="top-search-row">
   <div class="search"><input id="searchInput" type="search" placeholder="施設名・種類・地域・メモを検索" autocomplete="off" /></div>
   <div class="top-social-stack">
     <button type="button" id="jumpCurrentBtn" class="jump-current-btn" aria-label="現在地まで地図を移動">📍 現在地</button>
@@ -1667,6 +1683,120 @@ setTimeout(()=>{
 },0);
 
 
+
+/* ===== OpenStreetMap / Overpass 農産物直売所 =====
+   shop=farm を中心に、地図表示範囲周辺の直売所を取得してキャッシュします。 */
+let FARM_STANDS=[];
+let farmStandFetchTimer=null;
+let farmStandLastKey='';
+let farmStandRequestSeq=0;
+
+function farmStandIcon(){
+  return L.divIcon({
+    className:'',
+    html:'<div class="farm-stand-pin"><span>🥬</span></div>',
+    iconSize:[34,34],
+    iconAnchor:[17,34],
+    popupAnchor:[0,-31]
+  });
+}
+function farmStandPopup(f){
+  const q=encodeURIComponent(`${f.name||'農産物直売所'} ${f.address||''}`);
+  return `<div class="farm-popup">
+    <div class="farm-popup-name">🥬 ${esc(f.name||'農産物直売所')}</div>
+    <div class="farm-popup-meta">
+      ${f.address?`📍 ${esc(f.address)}<br>`:''}
+      ${f.phone?`☎ ${esc(f.phone)}<br>`:''}
+      ${f.openingHours?`🕐 ${esc(f.openingHours)}<br>`:''}
+      ${f.products?`🧺 ${esc(f.products)}<br>`:''}
+    </div>
+    <a class="farm-popup-link" href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Googleマップで見る</a>
+  </div>`;
+}
+function normalizeFarmStand(el){
+  const t=el.tags||{};
+  const lat=Number(el.lat ?? el.center?.lat);
+  const lon=Number(el.lon ?? el.center?.lon);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+  const address=[
+    t['addr:province']||t['addr:state']||'',
+    t['addr:city']||'',
+    t['addr:suburb']||'',
+    t['addr:quarter']||'',
+    t['addr:street']||'',
+    t['addr:housenumber']||''
+  ].filter(Boolean).join(' ');
+  return {
+    id:`${el.type||'node'}-${el.id}`,
+    name:t.name||t['name:ja']||t.operator||'農産物直売所',
+    lat,lon,address,
+    phone:t.phone||t['contact:phone']||'',
+    openingHours:t.opening_hours||'',
+    products:t.produce||t.product||'',
+    website:t.website||t['contact:website']||''
+  };
+}
+function farmStandBoundsKey(){
+  const c=map.getCenter(),z=map.getZoom();
+  return `${c.lat.toFixed(2)},${c.lng.toFixed(2)},${z}`;
+}
+async function fetchFarmStandsForViewport(force=false){
+  const z=map.getZoom();
+  if(z<8){farmStandLayer.clearLayers();return;}
+  const key=farmStandBoundsKey();
+  if(!force && key===farmStandLastKey)return;
+  const seq=++farmStandRequestSeq;
+
+  const b=map.getBounds().pad(0.25);
+  const south=b.getSouth(),west=b.getWest(),north=b.getNorth(),east=b.getEast();
+
+  const query=`[out:json][timeout:20];
+  (
+    node["shop"="farm"](${south},${west},${north},${east});
+    way["shop"="farm"](${south},${west},${north},${east});
+    relation["shop"="farm"](${south},${west},${north},${east});
+    node["amenity"="marketplace"]["produce"~"farm|local|vegetable|fruit",i](${south},${west},${north},${east});
+    way["amenity"="marketplace"]["produce"~"farm|local|vegetable|fruit",i](${south},${west},${north},${east});
+  );
+  out center tags;`;
+
+  try{
+    const r=await fetch('https://overpass-api.de/api/interpreter',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:'data='+encodeURIComponent(query)
+    });
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const data=await r.json();
+    if(seq!==farmStandRequestSeq)return;
+    FARM_STANDS=(data.elements||[]).map(normalizeFarmStand).filter(Boolean);
+    farmStandLastKey=key;
+    renderFarmStands();
+  }catch(e){
+    console.warn('farm stand fetch failed',e);
+  }
+}
+function renderFarmStands(){
+  farmStandLayer.clearLayers();
+  if(map.getZoom()<8)return;
+  const b=map.getBounds().pad(0.05);
+  const rows=FARM_STANDS.filter(f=>b.contains([f.lat,f.lon]));
+  for(const f of rows){
+    L.marker([f.lat,f.lon],{
+      icon:farmStandIcon(),
+      title:f.name||'農産物直売所',
+      riseOnHover:true
+    }).bindPopup(farmStandPopup(f),{maxWidth:300}).addTo(farmStandLayer);
+  }
+}
+function scheduleFarmStands(){
+  clearTimeout(farmStandFetchTimer);
+  farmStandFetchTimer=setTimeout(()=>fetchFarmStandsForViewport(false),850);
+}
+map.on('moveend zoomend',scheduleFarmStands);
+setTimeout(()=>fetchFarmStandsForViewport(true),1200);
+
+
 function facilityPhotoUrl(o){
   if(!o)return '';
   const v =
@@ -1947,6 +2077,7 @@ let hotelVisible=false;
 
 
 const restaurantLayer=L.layerGroup().addTo(map);
+const farmStandLayer=L.layerGroup().addTo(map);
 let restaurantVisible=false;
 let restaurantRenderTimer=null;
 let RESTAURANT_MASTER=[];
