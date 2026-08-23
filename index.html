@@ -3449,27 +3449,43 @@ setTimeout(()=>{
 
 
 
-/* ===== ホーム時：下部ボタンを「地図から検索」に切替 ===== */
+/* ===== ホーム/地図で下部ボタン文言を正しく切替 ===== */
+let __bottomTopToggleButton=null;
+let __bottomTopToggleOriginalText='';
+
+function getBottomTopToggleButton(){
+  if(__bottomTopToggleButton && document.body.contains(__bottomTopToggleButton)){
+    return __bottomTopToggleButton;
+  }
+  const buttons=[...document.querySelectorAll('button')];
+  const found=buttons.find(b=>{
+    const t=(b.textContent||'').trim();
+    return t.includes('上部のタイトル・検索欄を表示') || b.dataset.homeMapButton==='1';
+  });
+  if(found){
+    __bottomTopToggleButton=found;
+    if(!__bottomTopToggleOriginalText){
+      const t=(found.textContent||'').trim();
+      __bottomTopToggleOriginalText = t.includes('上部のタイトル・検索欄を表示')
+        ? t
+        : '⬆️ 上部のタイトル・検索欄を表示';
+    }
+  }
+  return found||null;
+}
+
 function syncBottomActionForPage(){
-  const homeVisible=!document.getElementById('stationHomeView')?.classList.contains('is-hidden');
-  const candidates=[...document.querySelectorAll('button')];
-  const topToggle=candidates.find(b=>
-    (b.textContent||'').includes('上部のタイトル・検索欄を表示')
-  );
-  if(!topToggle)return;
+  const home=document.getElementById('stationHomeView');
+  const homeVisible=home && !home.classList.contains('is-hidden');
+  const btn=getBottomTopToggleButton();
+  if(!btn)return;
 
   if(homeVisible){
-    if(!topToggle.dataset.originalText){
-      topToggle.dataset.originalText=topToggle.textContent.trim();
-    }
-    topToggle.textContent='🗺️ 地図から検索';
-    topToggle.dataset.homeMapButton='1';
-    topToggle.style.display='';
+    btn.textContent='🗺️ 地図から検索';
+    btn.dataset.homeMapButton='1';
   }else{
-    if(topToggle.dataset.originalText){
-      topToggle.textContent=topToggle.dataset.originalText;
-    }
-    delete topToggle.dataset.homeMapButton;
+    btn.textContent=__bottomTopToggleOriginalText || '⬆️ 上部のタイトル・検索欄を表示';
+    delete btn.dataset.homeMapButton;
   }
 }
 
@@ -3478,23 +3494,35 @@ document.addEventListener('click',function(e){
   if(!b)return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  showMapSubpage();
-  setTimeout(syncBottomActionForPage,50);
+
+  // switch to map page first
+  document.getElementById('stationHomeView')?.classList.add('is-hidden');
+  document.body.classList.add('map-subpage-active');
+  try{ map.invalidateSize(); }catch(err){}
+
+  // immediately restore original map-page label
+  b.textContent=__bottomTopToggleOriginalText || '⬆️ 上部のタイトル・検索欄を表示';
+  delete b.dataset.homeMapButton;
+
+  setTimeout(()=>{
+    try{ map.invalidateSize(); }catch(err){}
+    syncBottomActionForPage();
+  },120);
 },true);
 
-const __oldShowStationHome=showStationHome;
-showStationHome=function(){
-  __oldShowStationHome();
-  setTimeout(syncBottomActionForPage,50);
-};
+// Reinforce whenever the page mode changes.
+const __syncObserver=new MutationObserver(()=>syncBottomActionForPage());
+const __stationHomeView=document.getElementById('stationHomeView');
+if(__stationHomeView){
+  __syncObserver.observe(__stationHomeView,{attributes:true,attributeFilter:['class']});
+}
 
-const __oldShowMapSubpage=showMapSubpage;
-showMapSubpage=function(){
-  __oldShowMapSubpage();
-  setTimeout(syncBottomActionForPage,50);
-};
+document.getElementById('mapBackToHomeBtn')?.addEventListener('click',()=>{
+  setTimeout(syncBottomActionForPage,20);
+});
 
-setTimeout(syncBottomActionForPage,650);
+setTimeout(syncBottomActionForPage,700);
+setTimeout(syncBottomActionForPage,1400);
 
 </script>
 
